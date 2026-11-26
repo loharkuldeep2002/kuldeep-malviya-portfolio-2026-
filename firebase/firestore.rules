@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // This portfolio uses server-verified custom admin sessions.
+    // The browser must use the portfolio API, never direct database writes.
+    // Server SDK access is controlled separately through Google Cloud IAM.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

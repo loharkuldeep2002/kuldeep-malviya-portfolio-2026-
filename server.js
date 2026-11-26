@@ -24,7 +24,7 @@ const ROOT = __dirname;
 require('./server/config').loadEnvFile();
 
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -249,3 +249,4 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
   server.close(() => process.exit(0));
 });
+

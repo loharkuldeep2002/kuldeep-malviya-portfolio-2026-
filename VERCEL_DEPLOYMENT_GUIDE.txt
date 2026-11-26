@@ -1,0 +1,52 @@
+VERCEL DEPLOYMENT GUIDE — READ BEFORE PUSHING
+
+PACKAGE STATUS
+The source files have been gathered into a clean separate folder. The original project has not been modified. This package includes a Vercel-detectable `server.ts` entrypoint that starts the existing Node HTTP application in `server.js`; the copied server defaults to binding on all interfaces when no HOST is set. Vercel announced automatic Node server detection for root `server.ts` and `src/server.ts` on June 23, 2026.
+
+GIT SOURCE UPLOAD
+1. Use this package folder as the repository root when creating a GitHub repository (for example, with GitHub Desktop).
+2. Check that `.env`, `data/`, user uploads, `node_modules/`, and service-account files are not staged.
+3. Push the source to the Git repository.
+4. Import that repository into Vercel to create a Preview deployment first. Git pushes to connected repositories can trigger deployments.
+
+NEVER COMMIT
+- `.env`
+- Firebase service-account JSON or private keys
+- `data/db.json` or backups
+- private upload folders
+- `node_modules/`
+The included `.gitignore` excludes these paths. Review the staged file list before the first push.
+
+VERCEL ENVIRONMENT VARIABLES
+Set these in the Vercel project settings, not in Git:
+- `DATA_STORE` = `firestore`
+- `FIREBASE_PROJECT_ID` = `kuldeep-malviya-portfolio`
+- `FIREBASE_SERVICE_ACCOUNT_JSON` = the service-account JSON value, stored only as a protected secret in Vercel (never share it in chat or commit it)
+- `SITE_URL` = the assigned Preview/Production site URL as appropriate
+- `COOKIE_SECURE` = `1` for HTTPS
+Vercel supplies `PORT`; do not copy the local `.env` values for HOST/PORT. Keep `ADMIN_BOOTSTRAP_TOKEN` unset unless a fresh admin bootstrap/reset is specifically required. The existing database currently reports an admin configured.
+
+PRODUCTION BLOCKER: UPLOADED MEDIA
+The current CMS upload endpoint writes new files to local `uploads/`. Vercel Functions have a read-only filesystem except temporary `/tmp` scratch space, so files written there will not be durable across invocations. Before using Admin media uploads on a live deployment, move upload storage to Firebase Storage or another durable object store and adapt the CMS/API integration. Existing images in `assets/` are packaged as code assets; user uploads are not.
+
+FIREBASE ACCESS
+- Firestore rules and indexes are included in `firebase/` and `firebase.json`.
+- Git/Vercel import does not itself publish Firebase rules. Confirm the deployed Firestore rules remain deny-by-default for direct browser access.
+- The app uses the Firebase Admin SDK on its server side. The browser should continue to use the portfolio's own API.
+
+PLAN NOTE
+Vercel's current terms restrict Hobby use to personal/non-commercial projects. This portfolio advertises professional services, so confirm the intended usage against Vercel's current plan terms before production deployment. Use an eligible plan if the site is commercial.
+
+DEPLOYMENT ORDER
+1. Push this clean package to Git after checking the staged files.
+2. Configure Vercel secrets/environment variables.
+3. Create a Preview deployment and inspect homepage, projects, services, admin login, CMS reads/writes, contact flow, and media behavior.
+4. Set up durable media storage before relying on uploads.
+5. Configure final domain/SITE_URL and secure cookies, then deploy Production only after the Preview is acceptable.
+
+Official references checked 2026-11-26:
+- https://vercel.com/changelog/deploy-node-servers-with-zero-configuration
+- https://vercel.com/docs/functions/runtimes
+- https://vercel.com/docs/git
+- https://vercel.com/docs/environment-variables
+- https://vercel.com/legal/terms
