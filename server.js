@@ -215,38 +215,69 @@ async function handleRequest(req, res) {
   }
 }
 
-const server = http.createServer((req, res) => {
+let initialization;
+function initializeOnce() {
+  if (!initialization) initialization = dbModule.initialize();
+  return initialization;
+}
+
+async function handleIncoming(req, res) {
   const pathname = url.parse(req.url).pathname || '/';
   const stateful = pathname.startsWith('/api/') || pathname.startsWith('/admin') || ['/robots.txt', '/sitemap.xml'].includes(pathname);
   const result = dbModule.usesRemoteStore() && stateful
     ? dbModule.withRequest(() => handleRequest(req, res)) : handleRequest(req, res);
-  Promise.resolve(result).catch(error => {
+  await Promise.resolve(result).catch(error => {
     console.error('[datastore]', error.message);
     if (!res.headersSent) send(res, error.status || 503, JSON.stringify({ error: 'Database unavailable. Please try again.' }), { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     else if (!res.writableEnded) res.end();
   });
-});
+}
+
+// Vercel treats this file as the production Node.js function entry point.
+// Initialize Firestore once per warm function instance. The deployment bundle
+// is read-only, so only local development prepares the uploads directory.
+async function vercelHandler(req, res) {
+  try {
+    await initializeOnce();
+    return handleIncoming(req, res);
+  } catch (error) {
+    console.error('Website startup failed: ' + error.message);
+    if (!res.headersSent) {
+      send(res, error.status || 503, JSON.stringify({ error: 'Website is temporarily unavailable.' }), {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store'
+      });
+    }
+  }
+}
+
+module.exports = vercelHandler;
 
 // Initialise (creates data/db.json with seeded content on first run)
 async function start() {
-  const db = await dbModule.initialize();
+  const db = await initializeOnce();
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  const server = http.createServer(handleIncoming);
   server.listen(PORT, HOST, () => {
     console.log('Kuldeep Malviya portfolio running at http://' + HOST + ':' + PORT);
     console.log('Datastore: ' + (dbModule.usesFirestore() ? 'Cloud Firestore' : 'local JSON'));
     console.log('Admin: http://' + HOST + ':' + PORT + '/admin ' + (db.admins.length ? '(admin configured)' : '(first-run setup required)'));
   });
+  return server;
 }
-start().catch(error => {
-  console.error('Website startup failed: ' + error.message);
-  process.exitCode = 1;
-});
 
-process.on('SIGINT', () => {
-  console.log('\nShutting down…');
-  server.close(() => process.exit(0));
-});
-process.on('SIGTERM', () => {
-  server.close(() => process.exit(0));
-});
+if (require.main === module) {
+  start().then(server => {
+    process.on('SIGINT', () => {
+      console.log('\nShutting down…');
+      server.close(() => process.exit(0));
+    });
+    process.on('SIGTERM', () => {
+      server.close(() => process.exit(0));
+    });
+  }).catch(error => {
+    console.error('Website startup failed: ' + error.message);
+    process.exitCode = 1;
+  });
+}
 
