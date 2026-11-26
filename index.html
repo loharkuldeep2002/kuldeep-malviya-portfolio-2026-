@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kuldeep Malviya — Graphic Designer · Distinctive by design.</title>
+  <meta name="description" content="Kuldeep Malviya is an independent graphic designer creating identities, digital experiences and visual systems. Distinctive by design." />
+  <meta name="theme-color" content="#071014" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23071014'/%3E%3Cpath d='M18 46V18h6v12l12-12h8L31 31l13 15h-8L26 34v12z' fill='%23C9FF20'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+  <noscript>
+    <style>
+      html.has-reveal [data-reveal], [data-reveal] {
+        opacity: 1 !important;
+        transform: none !important;
+        translate: 0 0 !important;
+        scale: 1 !important;
+      }
+      .km-layer, .km-skip { display: none !important; }
+    </style>
+  </noscript>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Background motion system -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-glow glow-lime"></div>
+    <div class="particles">
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="bg-scan"></div>
+    <div class="bg-vignette"></div>
+  </div>
+
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="scroll-progress" aria-hidden="true"><span id="scrollProgressBar"></span></div>
+
+  <!-- Header -->
+  <header class="site-header" id="siteHeader">
+    <div class="shell header-inner">
+      <a href="#top" class="brand" aria-label="Kuldeep Malviya — home">
+        <span class="brand-mark" aria-hidden="true">KM</span>
+        <span class="brand-name">Kuldeep Malviya <span>PORTFOLIO</span></span>
+      </a>
+
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#work">Work</a>
+        <a href="/services">Services</a>
+        <a href="#about">About</a>
+        <a href="/contact">Contact</a>
+      </nav>
+
+      <div class="header-actions">
+        <button class="motion-toggle" id="motionToggle" type="button" aria-pressed="true" title="Toggle ambient motion">
+          <span class="motion-dot" aria-hidden="true"></span>
+          <span class="motion-label">Motion</span>
+        </button>
+        <a href="/contact" class="avail-badge">
+          <span class="dot" aria-hidden="true"></span>
+          <span data-bind="availabilityBadge">Available for projects</span>
+        </a>
+        <button class="menu-toggle" id="menuToggle" aria-expanded="false" aria-controls="mobileMenu" aria-label="Open navigation menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile menu -->
+  <div class="mobile-menu" id="mobileMenu" data-open="false" aria-hidden="true">
+    <nav aria-label="Mobile">
+      <a class="menu-link" href="#work">Work <span>01</span></a>
+      <a class="menu-link" href="#capabilities">Capabilities <span>02</span></a>
+      <a class="menu-link" href="#process">Process <span>03</span></a>
+      <a class="menu-link" href="/services">Services <span>04</span></a>
+      <a class="menu-link" href="#about">About <span>05</span></a>
+      <a class="menu-link" href="#experience">Experience <span>06</span></a>
+      <a class="menu-link" href="#toolkit">Toolkit <span>07</span></a>
+      <a class="menu-link" href="#education">Education <span>08</span></a>
+      <a class="menu-link" href="/contact">Contact <span>09</span></a>
+    </nav>
+    <div class="mobile-menu-footer">
+      <span>kuldeep@malviya.design</span>
+      <span>Indore, India — 22.7196° N</span>
+      <span>Available for projects · 2026</span>
+    </div>
+  </div>
+
+  <main id="main">
+    <!-- 01 — HERO (EXACT 1-TO-1 MATCH TO media_1795251925209_a3664592.jpg) -->
+    <section class="hero" id="top">
+      <div class="shell" style="position:relative">
+        <div class="measure-rail" aria-hidden="true">
+          <span style="top:0%">- 1180</span>
+          <span style="top:33%">860</span>
+          <span style="top:66%">520</span>
+          <span style="top:100%">180</span>
+        </div>
+
+        <div class="hero-meta mono" data-reveal>
+          <span><i class="dot"></i> 01 — INTRODUCTION</span>
+          <span class="hero-meta-right">INDORE, INDIA · 22.7196° N / 75.8577° E</span>
+        </div>
+
+        <div class="hero-grid grid">
+          <div class="hero-copy" data-stagger>
+            <span class="eyebrow" data-reveal><span class="dot"></span> <span data-bind="hero.eyebrow">Graphic Design Portfolio</span></span>
+
+            <h1 class="hero-title" data-reveal>
+              <span data-bind="hero.titleLead">Distinctive</span><br /><span data-bind="hero.titleBreak">by</span> <span class="lime" data-bind="hero.titleAccent">design.</span>
+            </h1>
+
+            <p class="hero-lede" data-reveal data-bind="hero.lede">
+              Graphic designer creating <strong>identities</strong>, <strong>digital experiences</strong> and
+              <strong>visual systems</strong>.
+            </p>
+
+            <div class="hero-actions" data-reveal>
+              <a class="btn btn-primary" href="#work">
+                <span data-bind="hero.primaryCtaLabel">Explore selected work</span> <span class="arr" aria-hidden="true">↗</span>
+              </a>
+              <a class="btn btn-ghost" href="/contact">
+                <span data-bind="hero.secondaryCtaLabel">Let&rsquo;s talk</span> <span class="arr" aria-hidden="true">→</span>
+              </a>
+            </div>
+
+            <dl class="hero-stats" data-reveal>
+              <div class="stat">
+                <dt><strong>45<em>+</em></strong></dt>
+                <dd data-bind="hero.stat0">Projects delivered</dd>
+              </div>
+              <div class="stat">
+                <dt><strong>5<em>+</em></strong></dt>
+                <dd data-bind="hero.stat1">Years of experience</dd>
+              </div>
+              <div class="stat">
+                <dt><strong>900<em>+</em></strong></dt>
+                <dd data-bind="hero.stat2">Design assets created</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="hero-visual" data-reveal>
+            <div class="portrait-aura" aria-hidden="true"></div>
+            <!-- Background Lines in 2 Colors Only: #C9FF20 (Lime) & White/Light Gray -->
+            <div class="orbit orbit-1" aria-hidden="true">
+              <span class="orbit-node node-lime"></span>
+            </div>
+            <div class="orbit orbit-2" aria-hidden="true">
+              <span class="orbit-node node-white"></span>
+            </div>
+
+            <figure class="portrait-card" data-tilt data-parallax="0.05">
+              <span class="corner tl" aria-hidden="true"></span>
+              <span class="corner tr" aria-hidden="true"></span>
+              <span class="corner bl" aria-hidden="true"></span>
+              <span class="corner br" aria-hidden="true"></span>
+              <div class="portrait-media">
+                <img src="assets/portrait-white.png" width="1172" height="1342"
+                     alt="Portrait of Kuldeep Malviya in clean white crewneck, graphic designer and digital creative"
+                     fetchpriority="high" decoding="async" />
+              </div>
+              <figcaption class="portrait-tag">
+                <span class="dot" aria-hidden="true"></span>
+                <span>
+                  <strong>Kuldeep Malviya</strong>
+                  <small>GRAPHIC DESIGNER</small>
+                </span>
+              </figcaption>
+            </figure>
+
+            <div class="portrait-caption mono">
+              <span>FIG. 01 — PORTRAIT</span>
+              <span>EST. 2019</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 — SELECTED WORK -->
+    <section class="section work" id="work">
+      <div class="shell">
+        <header class="section-head" data-reveal>
+          <p class="section-label"><span class="idx">01</span> Selected work <span class="rule"></span></p>
+          <h2 class="section-title">Selected work, <span class="lime">thoughtfully made.</span></h2>
+          <p class="section-note mono">SELECTED PROJECTS</p>
+        </header>
+
+        <div class="section-body">
+          <div class="work-grid" data-stagger>
+            <a class="project" data-reveal href="/project/noire" data-project-slug="noire" aria-label="Open noire project">
+              <div class="project-shell">
+                <div class="project-media">
+                  <img src="assets/projects/noire.jpg" width="1400" height="1400" loading="lazy" decoding="async"
+                       alt="Noiré fragrance bottle rendered in black glass on a dark stone plinth" />
+                </div>
+                </div></a>
+            <!-- Project 02: MO Zone Naturals -->
+            <a class="project" data-reveal href="/project/mo-zone-naturals" data-project-slug="mo-zone-naturals" aria-label="Open mo zone naturals project">
+              <div class="project-shell">
+                <div class="project-media">
+                  <img src="assets/projects/mo-zone.jpg" width="1600" height="923" loading="lazy" decoding="async"
+                       alt="MO Zone Naturals brand identity — packaging and visual system" />
+                </div>
+                </div></a>
+
+            <!-- Project 03: TERRAX Pumps -->
+            <a class="project" data-reveal href="/project/terrax-pumps" data-project-slug="terrax-pumps" aria-label="Open terrax pumps project">
+              <div class="project-shell">
+                <div class="project-media">
+                  <img src="assets/projects/terrax.jpg" width="1122" height="1402" loading="lazy" decoding="async"
+                       alt="TERRAX Pumps industrial web platform and technical layout system" />
+                </div>
+                </div></a>
+
+            <!-- Project 04: Organic Food -->
+            <a class="project" data-reveal href="/project/organic-food" data-project-slug="organic-food" aria-label="Open organic food project">
+              <div class="project-shell">
+                <div class="project-media">
+                  <img src="assets/projects/organic-food.jpg" width="1600" height="1344" loading="lazy" decoding="async"
+                       alt="Organic Food fresh produce e-commerce store homepage" />
+                </div>
+                </div></a>
+
+            <!-- Project 05: VLARE Fashion -->
+            <a class="project" data-reveal href="/project/vlare-fashion" data-project-slug="vlare-fashion" aria-label="Open vlare fashion project">
+              <div class="project-shell">
+                <div class="project-media">
+                  <img src="assets/projects/vlare.jpg" width="836" height="954" loading="lazy" decoding="async"
+                       alt="VLAIRE Fashion high-fashion editorial lookbook and brand system" />
+                </div>
+                </div></a>
+
+            <!-- Project 06: The Creative Journal -->
+            <a class="project" data-reveal href="/project/creative-journal" data-project-slug="creative-journal" aria-label="Open creative journal project">
+              <div class="project-shell">
+                <div class="project-media">
+                  <img src="assets/projects/creative-journal.jpg" width="836" height="954" loading="lazy" decoding="async"
+                       alt="The Creative Journal editorial design system and article layout" />
+                </div>
+                </div></a>
+
+            <!-- Project 07: Aurix Headphones -->
+            <a class="project" data-reveal href="/project/aurix-headphones" data-project-slug="aurix-headphones" aria-label="Open aurix headphones project">
+              <div class="project-shell">
+                <div class="project-media">
+                  <img src="assets/projects/aurix.jpg" width="800" height="510" loading="lazy" decoding="async"
+                       alt="Aurix Headphones 3D audio hardware visualization and lighting study" />
+                </div>
+                </div></a>
+          </div>
+
+          <p class="work-note" data-reveal>
+            <span class="dot" aria-hidden="true"></span>
+            Open a project to view its full case study
+            <span class="rule" aria-hidden="true"></span>
+            <a href="/contact" style="color:var(--lime)">Discuss a project ↗</a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 — CAPABILITIES -->
+    <section class="section capabilities" id="capabilities">
+      <div class="shell">
+        <div class="grid cap-grid">
+          <div class="cap-intro">
+            <p class="section-label mono" data-reveal><span class="idx">02</span> Capabilities</p>
+            <h2 data-reveal>Capabilities built for <span class="lime">clarity.</span></h2>
+            <p data-reveal>Identity, digital, packaging and 3D — designed as one coherent visual system.</p>
+            <a class="btn btn-ghost" href="/services" data-reveal>Explore capabilities <span class="arr" aria-hidden="true">↗</span></a>
+
+            <div class="cap-visual" data-reveal aria-hidden="true">
+              <div class="cap-visual-labels"><span>SYSTEM / 04</span><span>DESKTOP · MOBILE</span></div>
+              <div class="cap-bars">
+                <span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <div class="cap-visual-labels"><span>CLS 0.00</span><span>LCP 1.1s</span></div>
+              <div class="orbit"><span class="orbit-node"></span></div>
+            </div>
+          </div>
+
+          <div class="cap-list" data-stagger>
+            <article class="cap-card is-open" data-reveal tabindex="0" role="button" aria-expanded="true">
+              <span class="cap-num mono">01</span>
+              <span class="cap-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="6" height="6" rx="1" /><rect x="11.5" y="2.5" width="6" height="6" rx="1" /><rect x="2.5" y="11.5" width="6" height="6" rx="1" /><path d="M14.5 11.5v6M11.5 14.5h6" /></svg>
+              </span>
+              <span class="cap-text">
+                <h3>Brand Identity &amp; Systems</h3>
+                <p>Strategy-led identities built to scale.</p>
+                <span class="cap-panel">Logo &amp; mark systems · Typography · Colour · Brand guidelines · Asset libraries</span>
+              </span>
+              <span class="cap-arrow" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg>
+              </span>
+            </article>
+
+            <article class="cap-card" data-reveal tabindex="0" role="button" aria-expanded="false">
+              <span class="cap-num mono">02</span>
+              <span class="cap-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3.5" width="16" height="13" rx="1.6" /><path d="M2 7.5h16" /><path d="M5 5.5h.01M7.2 5.5h.01" stroke-linecap="round" /></svg>
+              </span>
+              <span class="cap-text">
+                <h3>Digital &amp; Web Experiences</h3>
+                <p>Websites and interfaces with intent.</p>
+                <span class="cap-panel">UX architecture · UI design · Responsive systems · Design-to-development handoff</span>
+              </span>
+              <span class="cap-arrow" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg>
+              </span>
+            </article>
+
+            <article class="cap-card" data-reveal tabindex="0" role="button" aria-expanded="false">
+              <span class="cap-num mono">03</span>
+              <span class="cap-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 5.5h2l1.5 8h8" stroke-linecap="round" /><path d="M6 8h11l-1.6 4.5" stroke-linejoin="round" /><circle cx="8" cy="16" r="1.2" /><circle cx="14" cy="16" r="1.2" /></svg>
+              </span>
+              <span class="cap-text">
+                <h3>Packaging &amp; Print Production</h3>
+                <p>Shelf-ready systems, produced properly.</p>
+                <span class="cap-panel">Packaging design · Dielines · Label systems · Pre-press &amp; print specification</span>
+              </span>
+              <span class="cap-arrow" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg>
+              </span>
+            </article>
+
+            <article class="cap-card" data-reveal tabindex="0" role="button" aria-expanded="false">
+              <span class="cap-num mono">04</span>
+              <span class="cap-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="m10 2.5 7 3.8-7 3.8-7-3.8 7-3.8Z" /><path d="m3 10 7 3.8 7-3.8" /><path d="m3 13.7 7 3.8 7-3.8" /></svg>
+              </span>
+              <span class="cap-text">
+                <h3>3D Visualization &amp; Motion</h3>
+                <p>Product worlds and motion studies.</p>
+                <span class="cap-panel">3D modelling · Lighting &amp; materials · Product renders · Motion studies</span>
+              </span>
+              <span class="cap-arrow" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg>
+              </span>
+            </article>
+
+            <article class="cap-card" data-reveal tabindex="0" role="button" aria-expanded="false">
+              <span class="cap-num mono">05</span>
+              <span class="cap-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M10 2.2 17.5 6.4v7.2L10 17.8 2.5 13.6V6.4L10 2.2Z" /><path d="M2.5 6.4 10 10.6l7.5-4.2M10 10.6v7.2" /></svg>
+              </span>
+              <span class="cap-text">
+                <h3>Art Direction &amp; Creative Strategy</h3>
+                <p>One clear visual language.</p>
+                <span class="cap-panel">Concept development · Campaign direction · Visual language · Creative strategy</span>
+              </span>
+              <span class="cap-arrow" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg>
+              </span>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 — PROCESS -->
+    <section class="section process" id="process">
+      <div class="shell">
+        <header class="section-head" data-reveal>
+          <p class="section-label"><span class="idx">03</span> Process <span class="rule"></span></p>
+          <h2 class="section-title">From idea to <span class="lime">experience.</span></h2>
+          <p class="section-note mono">THE PROCESS</p>
+        </header>
+
+        <div class="section-body">
+          <div class="process-track" id="processTrack" data-stagger data-reveal>
+            <div class="process-line" aria-hidden="true"></div>
+
+            <article class="process-step" style="--delay:0ms" tabindex="0" role="button">
+              <span class="step-node" aria-hidden="true"></span>
+              <span class="step-num">01</span>
+              <h3>Discover &amp; Audit</h3>
+              <p>Research, audit and understand the brief.</p>
+              <span class="step-arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg></span>
+            </article>
+
+            <article class="process-step" style="--delay:120ms" tabindex="0" role="button">
+              <span class="step-node" aria-hidden="true"></span>
+              <span class="step-num">02</span>
+              <h3>Strategy &amp; Positioning</h3>
+              <p>Shape the direction and the story.</p>
+              <span class="step-arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg></span>
+            </article>
+
+            <article class="process-step is-active" style="--delay:240ms" tabindex="0" role="button">
+              <span class="step-node" aria-hidden="true"></span>
+              <span class="step-num">03</span>
+              <h3>Design &amp; Exploration</h3>
+              <p>Explore type, form and visual systems.</p>
+              <span class="step-arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg></span>
+            </article>
+
+            <article class="process-step" style="--delay:360ms" tabindex="0" role="button">
+              <span class="step-node" aria-hidden="true"></span>
+              <span class="step-num">04</span>
+              <h3>Refinement &amp; Systems</h3>
+              <p>Refine, systemise and test every touchpoint.</p>
+              <span class="step-arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg></span>
+            </article>
+
+            <article class="process-step" style="--delay:480ms" tabindex="0" role="button">
+              <span class="step-node" aria-hidden="true"></span>
+              <span class="step-num">05</span>
+              <h3>Delivery &amp; Handover</h3>
+              <p>Deliver files, guidelines and a clean handover.</p>
+              <span class="step-arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5.5 4H12v6.5" /></svg></span>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 — SERVICES -->
+    <section class="section services" id="services">
+      <div class="shell">
+        <header class="section-head" data-reveal>
+          <p class="section-label"><span class="idx">04</span> Services <span class="rule"></span></p>
+          <h2 class="section-title">Services designed for <span class="lime">real impact.</span></h2>
+          <p class="section-note mono">WHAT I OFFER</p>
+        </header>
+
+        <div class="section-body">
+          <div class="services-grid" data-stagger>
+            <article class="service-card" data-reveal>
+              <div class="service-top">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="m11 2.5 8.5 5v10L11 22l-8.5-4.5v-10L11 2.5Z" /><path d="M2.5 7.5 11 12.4l8.5-4.9M11 12.4V22" /></svg>
+                </span>
+                <span class="service-num mono">01</span>
+              </div>
+              <h3>Identity Systems</h3>
+              <p>Logos, typography, colour and guidelines built as one scalable system.</p>
+              <div class="service-foot"><span>Logo · System · Guidelines</span><a class="service-more" href="/services/identity-systems">Details <span aria-hidden="true">↗</span></a></div>
+            </article>
+
+            <article class="service-card" data-reveal>
+              <div class="service-top">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3.8" width="18" height="14.4" rx="2" /><path d="M2 8.2h18M5 6h.01M7.4 6h.01" stroke-linecap="round" /></svg>
+                </span>
+                <span class="service-num mono">02</span>
+              </div>
+              <h3>Digital Design</h3>
+              <p>Websites, product interfaces and responsive design systems.</p>
+              <div class="service-foot"><span>UX · UI · Web</span><a class="service-more" href="/services/digital-design">Details <span aria-hidden="true">↗</span></a></div>
+            </article>
+
+            <article class="service-card" data-reveal>
+              <div class="service-top">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M11 2.4 19.6 7.3v9.4L11 21.6 2.4 16.7V7.3L11 2.4Z" /><path d="M2.4 7.3 11 12.2l8.6-4.9M11 12.2v9.4" /></svg>
+                </span>
+                <span class="service-num mono">03</span>
+              </div>
+              <h3>Packaging &amp; Print</h3>
+              <p>Dielines, label systems and production-ready artwork.</p>
+              <div class="service-foot"><span>Packaging · Print · Pre-press</span><a class="service-more" href="/services/packaging-print">Details <span aria-hidden="true">↗</span></a></div>
+            </article>
+
+            <article class="service-card" data-reveal>
+              <div class="service-top">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8.6" /><path d="m15.2 6.8-2.4 6-6 2.4 2.4-6 6-2.4Z" stroke-linejoin="round" /></svg>
+                </span>
+                <span class="service-num mono">04</span>
+              </div>
+              <h3>Creative Direction</h3>
+              <p>One clear visual language across campaign, brand and product.</p>
+              <div class="service-foot"><span>Strategy · Art direction</span><a class="service-more" href="/services/creative-direction">Details <span aria-hidden="true">↗</span></a></div>
+            </article>
+
+            <article class="service-card" data-reveal>
+              <div class="service-top">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="m11 2.2 7.5 4.2v7.2L11 17.8 2.5 13.6V6.4L11 2.2Z" /><path d="M2.5 6.4 10 10.6l7.5-4.2M10 10.6v7.2" /></svg>
+                </span>
+                <span class="service-num mono">05</span>
+              </div>
+              <h3>3D Product Visualization</h3>
+              <p>Product worlds, material studies and lighting built for campaigns.</p>
+              <div class="service-foot"><span>3D · Materials · Lighting</span><a class="service-more" href="/services/3d-visualization">Details <span aria-hidden="true">↗</span></a></div>
+            </article>
+
+            <article class="service-card" data-reveal>
+              <div class="service-top">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 4h16v14H3z" /><path d="M3 8h16M7 12h8M7 15h5" stroke-linecap="round" /></svg>
+                </span>
+                <span class="service-num mono">06</span>
+              </div>
+              <h3>Graphic &amp; Editorial Design</h3>
+              <p>Layout systems, publications and day-to-day brand design.</p>
+              <div class="service-foot"><span>Editorial · Layout · Print</span><a class="service-more" href="/services/graphic-design">Details <span aria-hidden="true">↗</span></a></div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 — ABOUT -->
+    <section class="section about" id="about">
+      <div class="shell">
+        <div class="grid about-grid">
+          <div class="about-visual" data-reveal>
+            <span class="about-monogram" aria-hidden="true" data-parallax="0.09">KM</span>
+            <div class="about-orbit" aria-hidden="true"></div>
+            <div class="about-frame">
+              <div class="about-media">
+                <img src="assets/portrait-white.png" width="350" height="400" loading="lazy" decoding="async" alt="Kuldeep Malviya, Graphic Designer" />
+              </div>
+            </div>
+
+            <div class="about-info">
+              <p class="mono">Profile / 001</p>
+              <div class="info-row"><span>Based in</span><span data-bind="about.based">Indore, India</span></div>
+              <div class="info-row"><span>Focus</span><span data-bind="about.focus">Identity &amp; digital</span></div>
+              <div class="info-row"><span>Status</span><span class="avail-dot" data-bind="about.status"><i class="dot" aria-hidden="true"></i> Available</span></div>
+            </div>
+          </div>
+
+          <div class="about-copy">
+            <p class="section-label mono" data-reveal style="margin-bottom:20px"><span class="idx">05</span> <span data-bind="about.label">About</span></p>
+            <h2 data-reveal><span data-bind="about.titleLead">The person behind the</span> <span class="lime" data-bind="about.titleAccent">pixels.</span></h2>
+            <p class="lede" data-reveal data-bind="about.lede">
+              I&rsquo;m Kuldeep Malviya, a graphic designer who helps brands look sharp, feel consistent and communicate clearly. I work across brand identity, web design and 3D visualization, turning ideas into thoughtful, high-quality visual experiences.
+            </p>
+            <blockquote class="about-quote" data-reveal data-bind="about.quote">
+              Good design is quiet until it matters. I build systems that stay coherent long after the launch.
+            </blockquote>
+
+            <div class="about-sign" data-reveal>
+              <span class="signature" data-bind="about.signature">Kuldeep Malviya</span>
+              <span class="rule" aria-hidden="true"></span>
+              <span data-bind="about.note">Graphic designer · Indore</span>
+            </div>
+
+            <div class="about-actions" data-reveal>
+              <a class="btn btn-primary" href="assets/resume.pdf" download>
+                Download résumé <span class="arr" aria-hidden="true">↗</span>
+              </a>
+              <a class="btn btn-ghost" href="#experience">
+                More about me <span class="arr" aria-hidden="true">→</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 — EXPERIENCE -->
+    <section class="section experience" id="experience">
+      <div class="shell">
+        <div class="exp-layout">
+          <div class="exp-intro">
+            <p class="section-label mono" data-reveal><span class="idx">06</span> Experience</p>
+            <h2 data-reveal>A practice built on <span class="lime">experience.</span></h2>
+            <p data-reveal>Five+ years of shaping brands and interfaces — from independent founders to established manufacturing and retail teams.</p>
+            <p class="mono" data-reveal><span class="dot" aria-hidden="true"></span> 2019 — Present</p>
+          </div>
+
+          <div class="timeline" id="experienceTimeline" data-stagger data-reveal>
+            <article class="exp-item" data-reveal style="--delay:0ms">
+              <p class="exp-year">2024 — Present</p>
+              <h3>Lead Brand Designer</h3>
+              <p>Leading identity systems, art direction and 3D visualisation for clients across retail, wellness and manufacturing.</p>
+              <span class="exp-role">Current role</span>
+            </article>
+
+            <article class="exp-item" data-reveal style="--delay:100ms">
+              <p class="exp-year">2022 — 2024</p>
+              <h3>Senior Graphic Designer</h3>
+              <p>Brand identity, packaging and campaign systems for consumer and industrial brands.</p>
+              <span class="exp-role">Studio</span>
+            </article>
+
+            <article class="exp-item" data-reveal style="--delay:200ms">
+              <p class="exp-year">2020 — 2022</p>
+              <h3>Digital Designer</h3>
+              <p>Web interfaces, design systems and product storytelling for growing digital teams.</p>
+              <span class="exp-role">Digital</span>
+            </article>
+
+            <article class="exp-item" data-reveal style="--delay:300ms">
+              <p class="exp-year">2019 — 2020</p>
+              <h3>Junior Visual Designer</h3>
+              <p>Campaign visuals, social systems and editorial layouts for independent founders and local businesses.</p>
+              <span class="exp-role">Independent</span>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 — TOOLKIT -->
+    <section class="section toolkit" id="toolkit">
+      <div class="shell">
+        <header class="section-head toolkit-head" data-reveal>
+          <p class="section-label"><span class="idx">07</span> Toolkit <span class="rule"></span></p>
+          <h2 class="section-title">The creative <span class="lime">toolkit.</span></h2>
+          <p class="section-note mono">TOOLS I USE</p>
+        </header>
+
+        <div class="tools-grid" data-stagger>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Fi</span><span><span class="tool-name">Figma</span><span class="tool-cat">UI/UX</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Ai</span><span><span class="tool-name">Adobe Illustrator</span><span class="tool-cat">Brand</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Ps</span><span><span class="tool-name">Adobe Photoshop</span><span class="tool-cat">Brand</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Ae</span><span><span class="tool-name">After Effects</span><span class="tool-cat">3D</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Bl</span><span><span class="tool-name">Blender</span><span class="tool-cat">3D</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">C4D</span><span><span class="tool-name">Cinema 4D</span><span class="tool-cat">3D</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Id</span><span><span class="tool-name">InDesign</span><span class="tool-cat">Brand</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Lr</span><span><span class="tool-name">Lightroom</span><span class="tool-cat">Brand</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Pr</span><span><span class="tool-name">Principle</span><span class="tool-cat">UI/UX</span></span></div>
+          <div class="tool" data-reveal><span class="tool-glyph" aria-hidden="true">Sp</span><span><span class="tool-name">Spline</span><span class="tool-cat">3D</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    
+    <!-- 08 — EDUCATION (EXACT MATCH TO MASTER MOCKUP) -->
+    <section class="section education" id="education">
+      <div class="shell">
+        <header class="section-head" data-reveal>
+          <p class="section-label"><span class="idx">08</span> Education <span class="rule"></span></p>
+          <h2 class="section-title">Always a student of the <span class="lime">craft.</span></h2>
+          <p class="section-note mono">EDUCATION</p>
+        </header>
+
+        <div class="education-bars-wrap" data-stagger>
+          <div class="edu-glass-bar" data-reveal>
+            <div class="edu-left-info">
+              <div class="edu-icon-cap" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                  <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                </svg>
+              </div>
+              <div class="edu-degree">
+                <h4>Master&rsquo;s in Computer Applications (MCA)</h4>
+                <span>Devi Ahilya Vishwavidyalaya · Indore, India</span>
+              </div>
+            </div>
+            <span class="edu-year-badge mono">2021 &mdash; 2023</span>
+          </div>
+
+          <div class="edu-glass-bar" data-reveal>
+            <div class="edu-left-info">
+              <div class="edu-icon-cap" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                  <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                </svg>
+              </div>
+              <div class="edu-degree">
+                <h4>Bachelor&rsquo;s in Computer Applications (BCA)</h4>
+                <span>Devi Ahilya Vishwavidyalaya · Indore, India</span>
+              </div>
+            </div>
+            <span class="edu-year-badge mono">2018 &mdash; 2021</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 09 — CONTACT -->
+    <section class="section contact" id="contact">
+      <div class="shell">
+        <header class="section-head" data-reveal style="margin-bottom:44px">
+          <p class="section-label"><span class="idx">09</span> Contact <span class="rule"></span></p>
+          <h2 class="section-title">Let&rsquo;s create something <span class="lime">meaningful.</span></h2>
+          <p class="section-note" data-bind="contact.note">Currently booking<br />Q1 — 2026</p>
+        </header>
+
+        <div class="contact" style="position:relative">
+          <div class="contact-glow" aria-hidden="true"></div>
+          <div class="contact-panel" data-reveal>
+            <div class="contact-info">
+              <h2 data-bind="contact.heading">Have a project in mind?</h2>
+              <p data-bind="contact.copy">Tell me what you&rsquo;re building, where it needs to go and what would make it successful.</p>
+
+              <div class="contact-details">
+                <div class="contact-line">
+                  <span>Email</span>
+                  <a href="mailto:kuldeep@malviya.design" data-bind="contact.email">kuldeep@malviya.design</a>
+                </div>
+                <div class="contact-line">
+                  <span>Location</span>
+                  <span style="color:var(--white);font-weight:500" data-bind="contact.location">Indore, India</span>
+                </div>
+                <div class="contact-line">
+                  <span>Response time</span>
+                  <span style="color:var(--white);font-weight:500" data-bind="contact.responseTime">Within 48 hours</span>
+                </div>
+              </div>
+
+              <p class="contact-meta"><span class="dot" aria-hidden="true"></span> <span data-bind="contact.availability">Available for new projects</span></p>
+            </div>
+
+            <div>
+              <form class="contact-form" id="contactForm" novalidate>
+                <div class="form-row two">
+                  <div class="field">
+                    <label for="name">Your name <span class="req" aria-hidden="true">*</span></label>
+                    <input id="name" name="name" type="text" autocomplete="name" placeholder="Full name" required aria-describedby="nameError" />
+                    <p class="field-error" id="nameError">Please enter your name.</p>
+                  </div>
+                  <div class="field">
+                    <label for="email">Email address <span class="req" aria-hidden="true">*</span></label>
+                    <input id="email" name="email" type="email" autocomplete="email" placeholder="you@studio.com" required aria-describedby="emailError" />
+                    <p class="field-error" id="emailError">Please enter a valid email address.</p>
+                  </div>
+                </div>
+
+                <div class="form-row two">
+                  <div class="field">
+                    <label for="service">Service <span class="req" aria-hidden="true">*</span></label>
+                    <select id="service" name="service" required aria-describedby="serviceError">
+                      <option value="" selected disabled>Select a service</option>
+                      <option>Identity Systems</option>
+                      <option>Digital Design</option>
+                      <option>Creative Direction</option>
+                      <option>Packaging &amp; Print</option>
+                      <option>Something else</option>
+                    </select>
+                    <p class="field-error" id="serviceError">Please choose a service.</p>
+                  </div>
+                  <div class="field">
+                    <label for="budget">Budget range <span class="req" aria-hidden="true">*</span></label>
+                    <select id="budget" name="budget" required aria-describedby="budgetError">
+                      <option value="" selected disabled>Select a budget</option>
+                      <option>Under ₹25,000</option>
+                      <option>₹25,000 — ₹50,000</option>
+                      <option>₹50,000 — ₹1,00,000</option>
+                      <option>₹1,00,000 — ₹2,50,000</option>
+                      <option>₹2,50,000 +</option>
+                    </select>
+                    <p class="field-error" id="budgetError">Please select a budget range.</p>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="message">Message <span class="req" aria-hidden="true">*</span></label>
+                  <textarea id="message" name="message" rows="4" placeholder="Goals, scope, timeline…" required aria-describedby="messageError"></textarea>
+                  <p class="field-error" id="messageError">Please share a few details about the project.</p>
+                </div>
+
+                <div class="form-submit-row">
+                  <button class="btn btn-primary" type="submit">Prepare email <span class="arr" aria-hidden="true">↗</span></button>
+                  <span class="form-note">No newsletters.<br />Just a reply.</span>
+                </div>
+              </form>
+
+              <div class="form-success" id="formSuccess" role="status" aria-live="polite" style="display:none;">
+                <span class="success-mark" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10.5 4 4 8-9" /></svg>
+                </span>
+                <h3>Message ready, <span id="successName">friend</span>.</h3>
+                <p>Your email app will open with your project details. Please send the draft there. If it does not open, email <a href="mailto:kuldeep@malviya.design" style="color:var(--lime)">kuldeep@malviya.design</a>.</p>
+                <button type="button" id="sendAnother" style="margin-top:14px;background:transparent;border:1px solid var(--lime);color:var(--lime);padding:8px 16px;border-radius:100px;cursor:pointer;">Send another message</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 10 — FOOTER -->
+  <footer class="site-footer">
+    <div class="shell">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="#top" class="brand" aria-label="Kuldeep Malviya — back to top">
+            <span class="brand-mark" aria-hidden="true">KM</span>
+            <span class="brand-name">Kuldeep Malviya <span>PORTFOLIO</span></span>
+          </a>
+          <p data-bind="footer.description">Independent graphic designer creating identities, digital experiences and visual systems.</p>
+          <p class="footer-loc" data-bind="footer.location">Indore, India · 22.7196° N</p>
+        </div>
+
+        <div class="footer-col">
+          <h3>Navigate</h3>
+          <ul>
+            <li><a href="#work">Work</a></li>
+            <li><a href="#capabilities">Capabilities</a></li>
+            <li><a href="/services">Services</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="/contact">Contact</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h3>Elsewhere</h3>
+          <ul>
+            <li><a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer">Instagram <span aria-hidden="true">↗</span></a></li>
+            <li><a href="https://www.behance.net/" target="_blank" rel="noopener noreferrer">Behance <span aria-hidden="true">↗</span></a></li>
+            <li><a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer">LinkedIn <span aria-hidden="true">↗</span></a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="mailto:kuldeep@malviya.design">kuldeep@malviya.design</a></li>
+            <li><a href="/contact">Start a project</a></li>
+            <li><a href="assets/resume.pdf" download>Résumé / PDF</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-statement">
+        <p><span data-bind="footer.statementLead">Distinctive by</span> <span class="lime" data-bind="footer.statementAccent">design.</span></p>
+        <span data-bind="footer.statementNote">Graphic design · Digital · 3D</span>
+      </div>
+
+      <div class="footer-bottom">
+        <span data-bind="footer.copyright">© <span id="year">2026</span> Kuldeep Malviya — All rights reserved</span>
+        <span data-bind="footer.builtNote">Designed &amp; built in Indore, IN</span>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="assets/file-preview.js" defer></script>
+  <script src="assets/gallery.js" defer></script>
+  <script src="assets/cms.js" defer></script>
+  <script src="assets/app.js" defer></script>
+</body>
+</html>

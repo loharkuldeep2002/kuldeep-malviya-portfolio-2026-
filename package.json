@@ -1,0 +1,18 @@
+{
+  "name": "kuldeep-malviya-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portfolio and private CMS with local JSON migration source and Cloud Firestore persistence",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "firebase:check": "node scripts/migrate-firestore.js --check",
+    "firebase:preview": "node scripts/migrate-firestore.js --dry-run",
+    "firebase:apply": "node scripts/migrate-firestore.js --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1"
+  }
+}

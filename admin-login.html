@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <title>Admin sign in — Kuldeep Malviya Portfolio</title>
+  <meta name="theme-color" content="#071014" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23071014'/%3E%3Cpath d='M18 46V18h6v12l12-12h8L31 31l13 15h-8L26 34v12z' fill='%23C9FF20'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="/assets/admin.css?v=separate-pages-20261124" />
+</head>
+<body class="admin-body" data-admin-page="login">
+  <a class="skip-link" href="#authContent">Skip to sign in</a>
+
+  <div id="booting" class="auth-shell">
+    <div class="auth-card">
+      <p class="mono">Checking session…</p>
+    </div>
+  </div>
+
+  <!-- Sign in / first-run setup -->
+  <div id="authView" class="auth-shell" hidden>
+    <div class="auth-card">
+      <div class="auth-head">
+        <a href="/" class="brand" aria-label="Kuldeep Malviya — home">
+          <span class="brand-mark" aria-hidden="true">KM</span>
+          <span class="brand-name">Kuldeep Malviya <span>PORTFOLIO</span></span>
+        </a>
+        <span class="auth-dot" aria-hidden="true"></span>
+      </div>
+      <div id="authContent"></div>
+      <p class="auth-foot mono">Private content management · <a href="/">View site ↗</a></p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/assets/vendor/qrcode-generator.js" defer></script>
+  <script src="/assets/authenticator-qr.js" defer></script>
+  <script src="/assets/admin.js?v=separate-pages-20261124" defer></script>
+</body>
+</html>

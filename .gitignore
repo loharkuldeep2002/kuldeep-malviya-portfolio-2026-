@@ -1,0 +1,10 @@
+# Private data and secrets — never commit
+.env
+data/
+uploads/
+*.log
+.cloud-attachments/
+node_modules/
+.secrets/
+*-service-account.json
+firebase-debug.log
