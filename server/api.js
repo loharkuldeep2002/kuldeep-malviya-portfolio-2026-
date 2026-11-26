@@ -680,6 +680,9 @@ function decodeUpload(body) {
 }
 
 function writeUpload(buffer, ext) {
+  if (process.env.VERCEL) {
+    throw new HttpError(503, 'Image uploads are unavailable on this deployment until persistent file storage is configured.');
+  }
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   const filename = `${Date.now().toString(36)}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
   fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
@@ -1185,3 +1188,4 @@ async function handleApi(req, res, url) {
 }
 
 module.exports = { handleApi, HttpError, UPLOAD_DIR, MAX_UPLOAD_JSON };
+
