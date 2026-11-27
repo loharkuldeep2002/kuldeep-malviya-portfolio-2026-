@@ -118,6 +118,7 @@
       'arrow-right': ['M5 12h14m-6-6 6 6-6 6'],
       external: ['M14 3h7v7', 'm10 14 11-11', 'M10 3H3v18h18v-7'],
       menu: ['M3 6h18M3 12h18M3 18h18'],
+      close: ['m6 6 12 12M6 18 18 6'],
       logout: ['M9 3H3v18h6', 'M9 12h12m-5-5 5 5-5 5']
     };
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -592,9 +593,7 @@
           state.projectId = null;
           state.serviceId = null;
           state.reviewEditId = null;
-          dashSidebar?.classList.remove('is-open');
-          dashView.classList.remove('mobile-nav-open');
-          mobileNavToggle?.setAttribute('aria-expanded', 'false');
+          setMobileNavigation(false);
           renderNav();
           renderTab();
         });
@@ -2131,6 +2130,14 @@
 
   document.querySelectorAll('[data-admin-icon]').forEach((node) => node.replaceChildren(icon(node.dataset.adminIcon)));
 
+  function setMobileNavigation(open) {
+    dashSidebar?.classList.toggle('is-open', open);
+    dashView?.classList.toggle('mobile-nav-open', open);
+    mobileNavToggle?.setAttribute('aria-expanded', String(open));
+    mobileNavToggle?.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+    mobileNavToggle?.replaceChildren(icon(open ? 'close' : 'menu'));
+  }
+
   sidebarToggle?.addEventListener('click', () => {
     const collapsed = dashView.classList.toggle('is-collapsed');
     sidebarToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
@@ -2141,25 +2148,18 @@
   });
 
   mobileNavToggle?.addEventListener('click', () => {
-    const open = dashSidebar.classList.toggle('is-open');
-    dashView.classList.toggle('mobile-nav-open', open);
-    mobileNavToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    mobileNavToggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+    setMobileNavigation(!dashSidebar.classList.contains('is-open'));
   });
 
   dashView?.addEventListener('click', (event) => {
     if (event.target !== dashView || !dashSidebar?.classList.contains('is-open')) return;
-    dashSidebar.classList.remove('is-open');
-    dashView.classList.remove('mobile-nav-open');
-    mobileNavToggle?.setAttribute('aria-expanded', 'false');
+    setMobileNavigation(false);
     mobileNavToggle?.focus();
   });
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && dashSidebar?.classList.contains('is-open')) {
-      dashSidebar.classList.remove('is-open');
-      dashView.classList.remove('mobile-nav-open');
-      mobileNavToggle?.setAttribute('aria-expanded', 'false');
+      setMobileNavigation(false);
       mobileNavToggle?.focus();
     }
   });
