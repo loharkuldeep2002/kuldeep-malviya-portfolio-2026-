@@ -10,9 +10,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23071014'/%3E%3Cpath d='M18 46V18h6v12l12-12h8L31 31l13 15h-8L26 34v12z' fill='%23C9FF20'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/style.css" />
-  <link rel="stylesheet" href="/assets/admin.css?v=admin-skip-link-20261127" />
+  <link rel="stylesheet" href="/assets/admin.css?v=admin-ui-consistency-20261127" />
 </head>
 <body class="admin-body" data-admin-page="dashboard">
   <a class="skip-link" href="#adminMain">Skip to dashboard</a>
@@ -31,26 +31,26 @@
           <span class="brand-mark" aria-hidden="true">KM</span>
           <span class="brand-name">Admin <span>CMS</span></span>
         </a>
-        <button class="dash-icon-btn dash-collapse-btn" id="sidebarToggle" type="button" aria-label="Collapse navigation" aria-pressed="false" title="Collapse navigation"><span aria-hidden="true">‹</span></button>
+        <button class="dash-icon-btn dash-collapse-btn" id="sidebarToggle" type="button" aria-label="Collapse navigation" aria-pressed="false" title="Collapse navigation"><span data-admin-icon="chevron-left" aria-hidden="true"></span></button>
       </div>
       <nav class="dash-nav" id="dashNav" aria-label="Dashboard"></nav>
       <div class="dash-side-foot">
-        <a class="dash-side-link" href="/" target="_blank" rel="noopener">View site ↗</a>
-        <button class="dash-side-link" id="logoutBtn" type="button">Sign out</button>
+        <a class="dash-side-link" href="/" target="_blank" rel="noopener"><span data-admin-icon="external" aria-hidden="true"></span>View site</a>
+        <button class="dash-side-link" id="logoutBtn" type="button"><span data-admin-icon="logout" aria-hidden="true"></span>Sign out</button>
         <span class="dash-email mono" id="dashEmail"></span>
       </div>
     </aside>
 
     <main class="dash-main" id="adminMain" tabindex="-1">
       <header class="dash-top">
-        <button class="dash-icon-btn dash-mobile-toggle" id="mobileNavToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="dashSidebar"><span aria-hidden="true">☰</span></button>
+        <button class="dash-icon-btn dash-mobile-toggle" id="mobileNavToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="dashSidebar"><span data-admin-icon="menu" aria-hidden="true"></span></button>
         <div class="dash-heading">
           <p class="mono" id="dashKicker">Dashboard</p>
           <h1 id="dashTitle">Overview</h1>
         </div>
         <div class="dash-top-actions">
           <span class="dash-session-pill"><i aria-hidden="true"></i> Secure session</span>
-          <a class="btn btn-ghost admin-small-btn" href="/#work" target="_blank" rel="noopener">View site <span aria-hidden="true">↗</span></a>
+          <a class="btn btn-ghost admin-small-btn" href="/#work" target="_blank" rel="noopener">View site <span data-admin-icon="external" aria-hidden="true"></span></a>
         </div>
       </header>
       <div id="dashContent" class="dash-content"></div>
@@ -61,7 +61,7 @@
 
   <script src="/assets/vendor/qrcode-generator.js" defer></script>
   <script src="/assets/authenticator-qr.js" defer></script>
-  <script src="/assets/admin.js?v=admin-cms-v2-20261127" defer></script>
+  <script src="/assets/admin.js?v=admin-ui-consistency-20261127" defer></script>
 </body>
 </html>
 

@@ -83,7 +83,7 @@
     Object.entries(attrs || {}).forEach(([key, value]) => {
       if (value === null || value === undefined || value === false) return;
       if (key === 'class') node.className = value;
-      else if (key === 'text') node.textContent = value;
+      else if (key === 'text') appendUiText(node, value);
       else if (key === 'html') node.innerHTML = value;
       else if (key === 'dataset') Object.assign(node.dataset, value);
       else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2), value);
@@ -91,9 +91,52 @@
       else node.setAttribute(key, value);
     });
     children.filter((child) => child !== null && child !== undefined && child !== false).forEach((child) => {
-      node.append(child.nodeType ? child : document.createTextNode(String(child)));
+      if (child.nodeType) node.append(child);
+      else appendUiText(node, child);
     });
     return node;
+  }
+
+  function icon(name) {
+    const paths = {
+      overview: ['M3 10 12 3l9 7', 'M5 9v12h14V9', 'M9 21v-8h6v8'],
+      projects: ['M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z'],
+      services: ['M9 6V4h6v2', 'M3 7h18v14H3z', 'M3 12a20 20 0 0 0 18 0', 'M12 11v3'],
+      reviews: ['m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9L7.5 14 3 9.6l6.2-.9z'],
+      comments: ['M21 11a8 8 0 0 1-8 8H7l-4 3V11a9 9 0 0 1 18 0Z', 'M7 10h10M7 14h6'],
+      media: ['M3 3h18v18H3z', 'm3 17 6-6 4 4 3-3 5 5', 'M16 7h.01'],
+      content: ['M5 3h14v18H5z', 'M8 7h8M8 11h8M8 15h5'],
+      navigation: ['M9 6h12M9 12h12M9 18h12', 'M3 6h.01M3 12h.01M3 18h.01'],
+      seo: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16', 'm17 17 4 4'],
+      revisions: ['M3 10a9 9 0 1 1 2 8', 'M3 4v6h6', 'M12 7v5l3 2'],
+      backups: ['M4 16v5h16v-5', 'M12 16V3m-5 5 5-5 5 5'],
+      account: ['m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z', 'm8 12 3 3 5-6'],
+      activity: ['M3 12h4l3-8 4 16 3-8h4'],
+      'chevron-left': ['m14 6-6 6 6 6'],
+      'chevron-right': ['m10 6 6 6-6 6'],
+      'arrow-left': ['M19 12H5m6-6-6 6 6 6'],
+      'arrow-right': ['M5 12h14m-6-6 6 6-6 6'],
+      external: ['M14 3h7v7', 'm10 14 11-11', 'M10 3H3v18h18v-7'],
+      menu: ['M3 6h18M3 12h18M3 18h18'],
+      logout: ['M9 3H3v18h6', 'M9 12h12m-5-5 5 5-5 5']
+    };
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    Object.entries({ viewBox: '0 0 24 24', class: 'admin-icon', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' }).forEach(([key, value]) => svg.setAttribute(key, value));
+    (paths[name] || paths.projects).forEach((d) => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      svg.append(path);
+    });
+    return svg;
+  }
+
+  function appendUiText(node, value) {
+    const text = String(value);
+    if (!['A', 'BUTTON'].includes(node.tagName)) { node.append(document.createTextNode(text)); return; }
+    const arrows = { '←': 'arrow-left', '→': 'arrow-right', '↗': 'external' };
+    text.split(/([←→↗])/).filter(Boolean).forEach((part) => {
+      node.append(arrows[part] ? icon(arrows[part]) : document.createTextNode(part));
+    });
   }
 
   async function api(path, options = {}) {
@@ -293,7 +336,7 @@
     const password = input('password', '', { type: 'password', autocomplete: 'current-password', placeholder: 'Password', required: 'required' });
     const remember = input('rememberDevice', '', { type: 'checkbox', checked: true });
     const message = h('p', { class: 'auth-note', 'aria-live': 'polite', text: errorMessage || '' });
-    const submit = h('button', { class: 'btn btn-primary', type: 'submit' }, 'Continue', h('span', { class: 'arr', 'aria-hidden': 'true', text: '→' }));
+    const submit = h('button', { class: 'btn btn-primary', type: 'submit' }, 'Continue', icon('arrow-right'));
 
     const form = h('form', { class: 'a-form', novalidate: 'novalidate' },
       authHead('Sign in', 'Administrator access only. Credentials are verified on the server.' , 1),
@@ -537,7 +580,7 @@
         const tab = TABS.find((item) => item.id === id);
         if (!tab) return;
         const btn = h('button', { type: 'button', 'aria-current': state.tab === tab.id ? 'page' : 'false', title: tab.label },
-          h('span', { class: 'dash-nav-icon', 'aria-hidden': 'true', text: navIcon(tab.id) }),
+          h('span', { class: 'dash-nav-icon', 'aria-hidden': 'true' }, icon(tab.id)),
           h('span', { class: 'dash-nav-text', text: tab.label })
         );
         const badge = tab.id === 'reviews' ? state.data?.counts?.pendingReviews : tab.id === 'comments' ? state.data?.counts?.pendingComments : 0;
@@ -559,10 +602,6 @@
       });
       dashNav.append(section);
     });
-  }
-
-  function navIcon(id) {
-    return ({ overview: '⌂', projects: '▦', services: '✳', reviews: '☆', comments: '◌', media: '▧', content: '▤', navigation: '☷', seo: '⌕', revisions: '↺', backups: '⇧', account: '◎', activity: '⌁' })[id] || '·';
   }
 
   function confirmProjectExit() {
@@ -2090,12 +2129,14 @@
     event.returnValue = '';
   });
 
+  document.querySelectorAll('[data-admin-icon]').forEach((node) => node.replaceChildren(icon(node.dataset.adminIcon)));
+
   sidebarToggle?.addEventListener('click', () => {
     const collapsed = dashView.classList.toggle('is-collapsed');
     sidebarToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
     sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
     sidebarToggle.title = collapsed ? 'Expand navigation' : 'Collapse navigation';
-    sidebarToggle.querySelector('span').textContent = collapsed ? '›' : '‹';
+    sidebarToggle.replaceChildren(icon(collapsed ? 'chevron-right' : 'chevron-left'));
     try { localStorage.setItem('km-admin-sidebar-collapsed', collapsed ? '1' : '0'); } catch {}
   });
 
@@ -2128,7 +2169,7 @@
       dashView.classList.add('is-collapsed');
       sidebarToggle?.setAttribute('aria-pressed', 'true');
       sidebarToggle?.setAttribute('aria-label', 'Expand navigation');
-      if (sidebarToggle) sidebarToggle.querySelector('span').textContent = '›';
+      if (sidebarToggle) sidebarToggle.replaceChildren(icon('chevron-right'));
     }
   } catch {}
 
