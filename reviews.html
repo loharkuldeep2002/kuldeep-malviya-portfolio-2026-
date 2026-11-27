@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Client reviews — Kuldeep Malviya</title>
+  <meta name="description" content="Read client feedback and share your experience working with Kuldeep Malviya." />
+  <meta name="theme-color" content="#071014" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23071014'/%3E%3Cpath d='M18 46V18h6v12l12-12h8L31 31l13 15h-8L26 34v12z' fill='%23C9FF20'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="/assets/pages.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="bg" aria-hidden="true"><div class="bg-grid"></div><div class="bg-glow glow-lime"></div><div class="bg-vignette"></div></div>
+  <header class="page-header">
+    <div class="page-shell page-header-inner">
+      <a href="/" class="brand" aria-label="Kuldeep Malviya — home"><span class="brand-mark" aria-hidden="true">KM</span><span class="brand-name">Kuldeep Malviya <span>PORTFOLIO</span></span></a>
+      <nav class="page-nav" aria-label="Primary">
+        <a href="/#work">Work</a><a href="/services">Services</a><a href="/reviews" aria-current="page">Client reviews</a><a href="/#about" class="page-nav-hide">About</a><a href="/contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="page-main">
+    <section class="section standalone-section">
+      <div class="shell">
+        <header class="section-head" data-static-reveal>
+          <p class="section-label"><span class="idx">06</span> Client reviews <span class="rule"></span></p>
+          <h1 class="section-title">Good work is <span class="lime">remembered.</span></h1>
+          <p class="section-note mono">CLIENT FEEDBACK</p>
+        </header>
+        <div class="section-body reviews-page-grid">
+          <section aria-labelledby="approvedReviewsTitle">
+            <div class="rating-summary" id="reviewSummary" aria-live="polite"></div>
+            <h2 id="approvedReviewsTitle">Approved feedback</h2>
+            <div class="review-list" id="reviewList"><p class="reviews-empty">Loading approved reviews…</p></div>
+          </section>
+          <form class="review-form" id="publicReviewForm" aria-labelledby="reviewFormTitle">
+            <h2 id="reviewFormTitle">Share your experience</h2>
+            <p>Your feedback stays private until it is approved. Only your display name, rating and review will appear publicly.</p>
+            <div class="field"><label for="reviewProject">Project</label><select id="reviewProject" name="projectSlug" required><option value="">Choose a project</option></select></div>
+            <fieldset class="rating-input"><legend>Your rating</legend>
+              <label title="1 star"><input type="radio" name="rating" value="1" required aria-label="1 star"><span>★</span></label>
+              <label title="2 stars"><input type="radio" name="rating" value="2" aria-label="2 stars"><span>★</span></label>
+              <label title="3 stars"><input type="radio" name="rating" value="3" aria-label="3 stars"><span>★</span></label>
+              <label title="4 stars"><input type="radio" name="rating" value="4" aria-label="4 stars"><span>★</span></label>
+              <label title="5 stars"><input type="radio" name="rating" value="5" aria-label="5 stars"><span>★</span></label>
+            </fieldset>
+            <div class="field"><label for="reviewName">Display name</label><input id="reviewName" name="displayName" type="text" maxlength="40" autocomplete="nickname" required placeholder="Your name"></div>
+            <div class="field"><label for="reviewText">Your review</label><textarea id="reviewText" name="text" rows="4" maxlength="1200" minlength="10" required placeholder="What was it like working together?"></textarea></div>
+            <label class="review-consent"><input id="reviewConsent" type="checkbox" required><span>I agree that this review and my display name may be published after moderation.</span></label>
+            <input name="website" type="text" tabindex="-1" autocomplete="off" class="hp-field" aria-hidden="true">
+            <button class="btn btn-primary" id="reviewSubmit" type="submit">Submit review <span class="arr" aria-hidden="true">↗</span></button>
+            <div class="form-status" id="reviewStatus" role="status" aria-live="polite" hidden></div>
+          </form>
+        </div>
+        <section class="image-comments-section" aria-labelledby="imageCommentsTitle">
+          <header class="section-head" data-static-reveal>
+            <h2 id="imageCommentsTitle" class="section-title">Leave a note on <span class="lime">the work.</span></h2>
+            <p class="section-note">Choose a project image and share a short comment. Comments appear after moderation.</p>
+          </header>
+          <div class="image-comments-grid">
+            <div>
+              <h3>Approved image comments</h3>
+              <div class="review-list" id="imageCommentList"><p class="reviews-empty">Loading approved comments…</p></div>
+            </div>
+            <form class="review-form" id="imageCommentForm" aria-labelledby="imageCommentFormTitle">
+              <h3 id="imageCommentFormTitle">Comment on a project image</h3>
+              <p>Your comment and display name stay private until approved.</p>
+              <div class="field"><label for="commentProject">Project</label><select id="commentProject" name="projectSlug" required><option value="">Choose a project</option></select></div>
+              <div class="field"><label for="commentImage">Project image</label><select id="commentImage" name="mediaUrl" required disabled><option value="">Choose a project first</option></select></div>
+              <div class="field"><label for="commentName">Display name</label><input id="commentName" name="displayName" type="text" maxlength="40" autocomplete="nickname" required placeholder="Your name"></div>
+              <div class="field"><label for="commentText">Comment</label><textarea id="commentText" name="text" rows="3" maxlength="1000" minlength="3" required placeholder="What stands out to you?"></textarea></div>
+              <label class="review-consent"><input id="commentConsent" type="checkbox" required><span>I agree that this comment and my display name may be published after moderation.</span></label>
+              <input name="website" type="text" tabindex="-1" autocomplete="off" class="hp-field" aria-hidden="true">
+              <button class="btn btn-primary" id="commentSubmit" type="submit">Submit comment <span class="arr" aria-hidden="true">↗</span></button>
+              <div class="form-status" id="commentStatus" role="status" aria-live="polite" hidden></div>
+            </form>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <footer class="page-footer"><div class="page-shell page-footer-inner"><span>© <span id="year">2026</span> Kuldeep Malviya</span><a href="/contact">Start a project ↗</a></div></footer>
+  <script src="/assets/app.js" defer></script>
+  <script src="/assets/reviews.js" defer></script>
+  <script src="/assets/analytics.js" defer></script>
+</body>
+</html>

@@ -11,12 +11,10 @@
     const items = [{ url: project.cover, alt: project.coverAlt || project.title }, ...(project.gallery || [])]
       .filter((item, index, list) => item.url && list.findIndex(other => other.url === item.url) === index);
     const host = make('section', 'art-carousel');
-    host.setAttribute('aria-label', project.title + ' images');
+    host.setAttribute('aria-label', project.title + ' media');
     const stage = make('figure', 'art-stage');
-    const image = make('img');
+    let currentMedia = null;
     const caption = make('figcaption', 'art-count');
-    image.decoding = 'async';
-    stage.append(image);
     const controls = make('div', 'art-controls');
     const previous = make('button', '', '←');
     const next = make('button', '', '→');
@@ -29,9 +27,47 @@
     let current = 0;
     const show = delta => {
       if (!items.length) return;
+      if (currentMedia instanceof HTMLVideoElement) {
+        currentMedia.pause();
+        currentMedia.removeAttribute('src');
+        currentMedia.load();
+      }
       current = (current + delta + items.length) % items.length;
-      image.src = items[current].url.startsWith('assets/') ? '/' + items[current].url : items[current].url;
-      image.alt = items[current].alt || project.title + ' — image ' + (current + 1);
+      const item = items[current];
+      const src = item.url.startsWith('assets/') ? '/' + item.url : item.url;
+      if (item.kind === 'video') {
+        const playback = item.playback || {};
+        const video = make('video');
+        video.src = src;
+        video.setAttribute('aria-label', item.alt || project.title + ' — video ' + (current + 1));
+        video.controls = playback.controls !== false;
+        video.loop = playback.loop === true;
+        video.muted = playback.muted !== false;
+        video.autoplay = playback.autoplay === true && video.muted;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        video.addEventListener('loadedmetadata', () => {
+          const rate = Number(playback.playbackRate);
+          video.playbackRate = [0.5, 0.75, 1, 1.25, 1.5, 2].includes(rate) ? rate : 1;
+        }, { once: true });
+        if ('IntersectionObserver' in window) {
+          const observer = new IntersectionObserver(([entry]) => {
+            if (!entry.isIntersecting) video.pause();
+            else if (video.autoplay && video.muted) video.play().catch(() => {});
+          }, { threshold: 0.2 });
+          observer.observe(video);
+          video.addEventListener('emptied', () => observer.disconnect(), { once: true });
+        }
+        currentMedia = video;
+      } else {
+        const image = make('img');
+        image.decoding = 'async';
+        image.src = src;
+        image.alt = item.alt || project.title + ' — image ' + (current + 1);
+        image.addEventListener('error', () => { image.alt = 'Image unavailable — ' + project.title; }, { once: true });
+        currentMedia = image;
+      }
+      stage.replaceChildren(currentMedia);
       caption.textContent = `${current + 1} / ${items.length}`;
     };
     previous.addEventListener('click', () => show(-1));
@@ -43,14 +79,11 @@
     });
     host.tabIndex = 0;
     let touchX;
-    image.addEventListener('touchstart', event => { touchX = event.changedTouches[0].clientX; }, { passive: true });
-    image.addEventListener('touchend', event => {
+    stage.addEventListener('touchstart', event => { touchX = event.changedTouches[0].clientX; }, { passive: true });
+    stage.addEventListener('touchend', event => {
       const dx = event.changedTouches[0].clientX - touchX;
       if (Math.abs(dx) > 60) show(dx < 0 ? 1 : -1);
     }, { passive: true });
-    image.addEventListener('error', () => {
-      image.alt = 'Image unavailable — ' + project.title;
-    });
     host.append(stage, controls);
     show(0);
     return host;
@@ -76,6 +109,7 @@
         controls.querySelector(event.key === 'ArrowLeft' ? 'button:first-child' : 'button:last-child').click();
       });
       dialog.addEventListener('close', () => {
+        dialog.querySelectorAll('video').forEach(video => video.pause());
         document.body.classList.remove('art-open');
         opener?.focus({ preventScroll: true });
       });

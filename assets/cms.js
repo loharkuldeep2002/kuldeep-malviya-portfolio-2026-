@@ -171,15 +171,17 @@
 
   function renderNav(nav) {
     if (!nav) return;
+    const primaryLinks = Array.isArray(nav.primary) ? nav.primary.slice() : [];
+    if (!primaryLinks.some((link) => link.href === '/reviews')) primaryLinks.splice(Math.min(2, primaryLinks.length), 0, { label: 'Client reviews', href: '/reviews' });
     const primary = document.querySelector('.site-nav');
-    if (primary && Array.isArray(nav.primary)) {
+    if (primary) {
       primary.textContent = '';
-      nav.primary.forEach((link) => primary.append(el('a', { href: link.href, text: link.label })));
+      primaryLinks.forEach((link) => primary.append(el('a', { href: link.href, text: link.label })));
     }
     const mobile = document.querySelector('.mobile-menu nav');
-    if (mobile && Array.isArray(nav.primary)) {
+    if (mobile) {
       mobile.textContent = '';
-      nav.primary.forEach((link, index) => {
+      primaryLinks.forEach((link, index) => {
         mobile.append(
           el('a', { class: 'menu-link', href: link.href }, document.createTextNode(link.label + ' '), el('span', { text: String(index + 1).padStart(2, '0') }))
         );

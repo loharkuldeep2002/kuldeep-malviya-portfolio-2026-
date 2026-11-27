@@ -30,18 +30,26 @@
     serviceId: null,
     reviewFilter: 'pending',
     reviewEditId: null,
-    mfaChallenge: null
+    mfaChallenge: null,
+    expandedRevisionId: null,
+    mediaQuery: '',
+    mediaFilter: 'all',
+    mediaCollection: 'all'
   };
+  let notificationPollStarted = false;
 
   const TABS = [
     { id: 'overview', label: 'Overview', kicker: 'Dashboard' },
     { id: 'projects', label: 'Projects', kicker: 'Case studies' },
     { id: 'services', label: 'Services', kicker: 'Offer' },
     { id: 'reviews', label: 'Reviews', kicker: 'Moderation' },
+    { id: 'comments', label: 'Image comments', kicker: 'Moderation' },
     { id: 'media', label: 'Media', kicker: 'Library' },
     { id: 'content', label: 'Website content', kicker: 'Copy' },
     { id: 'navigation', label: 'Navigation & footer', kicker: 'Structure' },
     { id: 'seo', label: 'SEO & settings', kicker: 'Search' },
+    { id: 'revisions', label: 'Revisions', kicker: 'Restore' },
+    { id: 'backups', label: 'Backups', kicker: 'Export' },
     { id: 'account', label: 'Account & security', kicker: 'Access' },
     { id: 'activity', label: 'Activity', kicker: 'History' }
   ];
@@ -91,6 +99,54 @@
       throw error;
     }
     return payload;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('The file could not be read.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadMediaFile(file, alt, collection = '') {
+    try {
+      const upload = await api('/api/admin/media/upload-url', {
+        method: 'POST',
+        body: JSON.stringify({ mimeType: file.type, size: file.size })
+      });
+      const response = await fetch(upload.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': upload.mime,
+          'x-goog-meta-firebasestoragedownloadtokens': upload.downloadToken
+        },
+        body: file
+      });
+      if (!response.ok) throw new Error('The file could not be uploaded to Firebase Storage.');
+      return await api('/api/admin/media/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: upload.id,
+          path: upload.path,
+          downloadToken: upload.downloadToken,
+          mime: upload.mime,
+          size: upload.size,
+          filename: file.name,
+          alt,
+          collection
+        })
+      });
+    } catch (error) {
+      const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+      if (!isLocal || error.status !== 503 || !file.type.startsWith('image/')) throw error;
+      if (file.size > 5 * 1024 * 1024) throw new Error('Local fallback supports images up to 5 MB. Configure Firebase Storage for larger files.');
+      return await api('/api/admin/media', {
+        method: 'POST',
+        body: JSON.stringify({ filename: file.name, dataUrl: await readFileAsDataUrl(file), alt, collection })
+      });
+    }
   }
 
   let toastTimer = null;
@@ -159,16 +215,36 @@
   }
 
   function mediaOptions() {
-    return (state.data.media || []).map((item) => ({ value: item.url, label: item.alt || item.filename }));
+    return (state.data.media || [])
+      .filter((item) => item.kind !== 'video' && !String(item.mime || '').startsWith('video/'))
+      .map((item) => ({ value: item.url, label: item.alt || item.filename }));
   }
 
   function mediaPicker(targetInput) {
-    if (!state.data.media.length) return null;
-    const picker = select('mediaPick', '', [{ value: '', label: 'Choose from media library…' }, ...mediaOptions()]);
+    const options = mediaOptions();
+    if (!options.length) return null;
+    const picker = select('mediaPick', '', [{ value: '', label: 'Choose from media library…' }, ...options]);
     picker.addEventListener('change', () => {
       if (picker.value) targetInput.value = picker.value;
     });
     return picker;
+  }
+
+  function galleryMediaPicker(galleryInput) {
+    const items = state.data.media || [];
+    if (!items.length) return null;
+    const picker = select('galleryMediaPick', '', [{ value: '', label: 'Choose image or video…' }, ...items.map((item) => ({ value: item.url, label: `${item.kind || 'image'} · ${item.alt || item.filename}` }))]);
+    const add = h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Add to gallery' });
+    add.addEventListener('click', () => {
+      const item = items.find((entry) => entry.url === picker.value);
+      if (!item) { toast('Choose media from the library first.', true); return; }
+      const line = `${item.url} | ${item.alt || item.filename}`;
+      const current = lines(galleryInput.value);
+      if (current.some((value) => value.startsWith(`${item.url} |`) || value === item.url)) { toast('This media is already in the gallery.', true); return; }
+      galleryInput.value = [...current, line].join('\n');
+      picker.value = '';
+    });
+    return h('div', { class: 'media-gallery-picker' }, picker, add);
   }
 
   function confirmAction(message) {
@@ -393,6 +469,7 @@
       await loadData();
       booting.hidden = true;
       dashView.hidden = false;
+      startNotificationPolling();
     } catch (err) {
       if (err.status === 401) {
         location.replace(LOGIN_URL);
@@ -416,12 +493,38 @@
     renderTab();
   }
 
+  function startNotificationPolling() {
+    if (notificationPollStarted) return;
+    notificationPollStarted = true;
+    window.setInterval(async () => {
+      if (document.hidden || !state.data) return;
+      try {
+        const latest = await api('/api/admin/session');
+        const prev = state.data.counts || {};
+        const next = latest.counts || {};
+        const newReviews = Math.max(0, (next.pendingReviews || 0) - (prev.pendingReviews || 0));
+        const newComments = Math.max(0, (next.pendingComments || 0) - (prev.pendingComments || 0));
+        state.data = latest;
+        renderNav();
+        if (newReviews || newComments) {
+          const notices = [];
+          if (newReviews) notices.push(`${newReviews} new review${newReviews === 1 ? '' : 's'}`);
+          if (newComments) notices.push(`${newComments} new image comment${newComments === 1 ? '' : 's'}`);
+          toast(`${notices.join(' and ')} awaiting moderation.`);
+        }
+      } catch {}
+    }, 30000);
+  }
+
   function renderNav() {
     dashNav.textContent = '';
     TABS.forEach((tab) => {
       const btn = h('button', { type: 'button', 'aria-current': state.tab === tab.id ? 'true' : 'false' }, tab.label);
       if (tab.id === 'reviews' && state.data && state.data.counts.pendingReviews) {
         btn.append(h('span', { class: 'nav-count', text: String(state.data.counts.pendingReviews) }));
+      }
+      if (tab.id === 'comments' && state.data && state.data.counts.pendingComments) {
+        btn.append(h('span', { class: 'nav-count', text: String(state.data.counts.pendingComments) }));
       }
       btn.addEventListener('click', () => {
         state.tab = tab.id;
@@ -446,10 +549,13 @@
       projects: renderProjects,
       services: renderServices,
       reviews: renderReviews,
+      comments: renderComments,
       media: renderMedia,
       content: renderContent,
       navigation: renderNavigation,
       seo: renderSeo,
+      revisions: renderRevisions,
+      backups: renderBackups,
       account: renderAccount,
       activity: renderActivity
     };
@@ -459,15 +565,27 @@
   /* ------------------------------- overview ------------------------------- */
 
   function renderOverview() {
-    const { counts, reviews, activity } = state.data;
+    const { counts, reviews, activity, analytics } = state.data;
     dashContent.append(
       h('div', { class: 'a-grid cols-4' },
-        metric(counts.publishedProjects, 'Published projects'),
-        metric(counts.publishedServices, 'Published services'),
-        metric(counts.pendingReviews, 'Pending reviews'),
-        metric(counts.media, 'Media items')
+        metric(analytics.pageViews, 'Page views · 30 days'),
+        metric(analytics.projectViews, 'Project views · 30 days'),
+        metric(analytics.contactIntents, 'Contact intents · 30 days'),
+        metric(analytics.ctaClicks, 'CTA clicks · 30 days')
       )
     );
+
+    dashContent.append(h('section', { class: 'a-card' },
+      h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Visitor activity' }), h('p', { text: state.data.analyticsEnabled ? 'Aggregated counts for the last 30 days. These are page views, not unique visitors; no form fields or personal details are recorded.' : 'Analytics are paused. Set ANALYTICS_ENABLED=true in the hosting environment to begin collecting aggregated counts.' }))),
+      analytics.topProjects.length ? h('div', { class: 'a-list' }, ...analytics.topProjects.map((project) => h('div', { class: 'a-row' }, h('div', { class: 'a-row-main' }, h('div', { class: 'a-row-title', text: project.title }), h('div', { class: 'a-row-meta', text: `/${project.slug}` })), chip(`${project.views} views`, 'approved')))) : h('p', { class: 'a-empty', text: 'No project view data recorded in the last 30 days.' })
+    ));
+
+    dashContent.append(h('div', { class: 'a-grid cols-4' },
+      metric(counts.publishedProjects, 'Published projects'),
+      metric(counts.publishedServices, 'Published services'),
+      metric(counts.pendingReviews, 'Pending reviews'),
+      metric(counts.media, 'Media items')
+    ));
 
     const pending = reviews.filter((review) => review.status === 'pending').slice(0, 3);
     dashContent.append(
@@ -555,6 +673,7 @@
       chip(project.archived ? 'archived' : project.status, project.archived ? 'archived' : project.status),
       h('div', { class: 'a-row-actions' },
         h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Edit', onclick: () => { state.projectId = project.id; renderTab(); } }),
+        h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Duplicate', onclick: () => duplicateProject(project) }),
         h('a', { class: 'a-btn a-btn-sm', href: `/project/${project.slug}?preview=1`, target: '_blank', rel: 'noopener', text: 'Preview ↗' }),
         project.archived
           ? h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Restore', onclick: () => restoreProject(project) })
@@ -562,6 +681,22 @@
         h('button', { class: 'a-btn a-btn-sm danger', type: 'button', text: 'Delete', onclick: () => deleteProject(project) })
       )
     );
+  }
+
+  async function duplicateProject(project) {
+    const { id, createdAt, updatedAt, archived, ...copy } = project;
+    copy.title = `${project.title} copy`;
+    copy.slug = `${project.slug}-copy`;
+    copy.status = 'draft';
+    copy.archived = false;
+    try {
+      const result = await api('/api/admin/projects', { method: 'POST', body: JSON.stringify(copy) });
+      toast('Draft copy created. Review the slug, images and content before publishing.');
+      await loadData();
+      state.projectId = result.project.id;
+      state.tab = 'projects';
+      renderNav(); renderTab();
+    } catch (err) { toast(err.message, true); }
   }
 
   function projectEditor(project) {
@@ -591,25 +726,33 @@
     const seoDescription = textarea('seoDescription', v('seoDescription', ''), { rows: 2 });
     const message = h('p', { class: 'auth-note', 'aria-live': 'polite', text: '' });
     const picker = mediaPicker(cover);
+    const galleryPicker = galleryMediaPicker(gallery);
 
-    const form = h('form', { class: 'a-form' },
+    const form = h('form', { class: 'a-form editor-form' },
       h('div', { class: 'a-card-head' }, h('h2', { text: isNew ? 'New project' : `Edit — ${project.title}` })),
-      h('div', { class: 'row' }, field('Title', title, null, true), field('Slug', slug, 'Lowercase letters, numbers, hyphens.')),
-      h('div', { class: 'row' }, field('Subtitle', subtitle), field('Client / display label', client)),
-      h('div', { class: 'row' }, field('Category', category), field('Year', year), field('Order', order), field('Status', status)),
-      field('Short description', shortDescription, 'Shown on the work grid.'),
-      field('Challenge', challenge),
-      field('Approach & process', approach),
-      field('Outcome', outcome, 'Only add verified outcomes. Leave empty to hide the section.'),
-      h('div', { class: 'row' }, field('Deliverables', deliverables, 'One per line.'), field('Tags', tags, 'One per line.')),
-      field('Facts', facts, 'One per line as “Value | Label”. Shown in the project sidebar and featured card.'),
-      field('Services', services, 'Comma-separated service slugs.'),
-      h('div', { class: 'row' }, field('Cover image URL', cover, null), picker ? field('Media library', picker) : null),
-      field('Cover alt text', coverAlt, 'Describe the image for screen readers.'),
-      field('Gallery', gallery, 'One per line as “URL | alt text”.'),
-      h('div', { class: 'row' }, field('SEO title', seoTitle), field('SEO description', seoDescription)),
+      h('details', { class: 'a-card editor-section', open: true }, h('summary', { text: 'Basics & publishing' }),
+        h('div', { class: 'row' }, field('Title', title, null, true), field('Slug', slug, 'Lowercase letters, numbers, hyphens.')),
+        h('div', { class: 'row' }, field('Subtitle', subtitle), field('Client / display label', client)),
+        h('div', { class: 'row' }, field('Category', category), field('Year', year), field('Order', order), field('Status', status)),
+        field('Short description', shortDescription, 'Shown on the work grid.')
+      ),
+      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Story & outcomes' }),
+        field('Challenge', challenge), field('Approach & process', approach), field('Outcome', outcome, 'Only add verified outcomes. Leave empty to hide the section.')
+      ),
+      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Deliverables & links' }),
+        h('div', { class: 'row' }, field('Deliverables', deliverables, 'One per line.'), field('Tags', tags, 'One per line.')),
+        field('Facts', facts, 'One per line as “Value | Label”. Shown in the project sidebar and featured card.'),
+        field('Services', services, 'Comma-separated service slugs.')
+      ),
+      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Images & gallery' }),
+        h('div', { class: 'row' }, field('Cover image URL', cover), picker ? field('Media library', picker) : null),
+        field('Cover alt text', coverAlt, 'Describe the image for screen readers.'),
+        field('Gallery', gallery, 'One per line as “URL | alt text”.'),
+        galleryPicker ? field('Add from media library', galleryPicker, 'Images and videos keep their saved playback settings.') : null
+      ),
+      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Search preview' }), h('div', { class: 'row' }, field('SEO title', seoTitle), field('SEO description', seoDescription))),
       message,
-      h('div', { class: 'a-actions' },
+      h('div', { class: 'a-actions editor-sticky-actions' },
         h('button', { class: 'a-btn primary', type: 'submit', text: isNew ? 'Create project' : 'Save changes' }),
         h('button', {
           class: 'a-btn',
@@ -764,25 +907,27 @@
     const message = h('p', { class: 'auth-note', 'aria-live': 'polite', text: '' });
     const picker = mediaPicker(cover);
 
-    const form = h('form', { class: 'a-form' },
+    const form = h('form', { class: 'a-form editor-form' },
       h('div', { class: 'a-card-head' }, h('h2', { text: isNew ? 'New service' : `Edit — ${service.name}` })),
-      h('div', { class: 'row' }, field('Service name', name, null, true), field('Slug', slug)),
-      field('Short summary', summary),
-      field('Full description', description),
-      h('div', { class: 'row' }, field('What is included', included, 'One per line.'), field('Ideal client / project', idealFor)),
-      field('Process steps', process, 'One per line as “Title | Description”.'),
-      field('Related projects', relatedProjects, 'Comma-separated project slugs.'),
-      h('div', { class: 'row' }, field('Cover image URL', cover), picker ? field('Media library', picker) : null),
-      field('Cover alt text', coverAlt),
-      h('div', { class: 'row' },
-        field('Price label', priceLabel, 'Use “Request a quote” rather than inventing a price.'),
-        field('CTA label', ctaLabel),
-        field('CTA link', ctaHref)
+      h('details', { class: 'a-card editor-section', open: true }, h('summary', { text: 'Service details' }),
+        h('div', { class: 'row' }, field('Service name', name, null, true), field('Slug', slug)),
+        field('Short summary', summary), field('Full description', description)
       ),
-      h('div', { class: 'row' }, field('SEO title', seoTitle), field('SEO description', seoDescription)),
-      h('div', { class: 'row' }, field('Order', order), field('Status', status)),
+      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Offer & process' }),
+        h('div', { class: 'row' }, field('What is included', included, 'One per line.'), field('Ideal client / project', idealFor)),
+        field('Process steps', process, 'One per line as “Title | Description”.'),
+        h('div', { class: 'row' }, field('Price label', priceLabel, 'Use “Request a quote” rather than inventing a price.'), field('CTA label', ctaLabel), field('CTA link', ctaHref)),
+        field('Related projects', relatedProjects, 'Comma-separated project slugs.')
+      ),
+      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Cover image' }),
+        h('div', { class: 'row' }, field('Cover image URL', cover), picker ? field('Media library', picker) : null), field('Cover alt text', coverAlt)
+      ),
+      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Search & publishing' }),
+        h('div', { class: 'row' }, field('SEO title', seoTitle), field('SEO description', seoDescription)),
+        h('div', { class: 'row' }, field('Order', order), field('Status', status))
+      ),
       message,
-      h('div', { class: 'a-actions' },
+      h('div', { class: 'a-actions editor-sticky-actions' },
         h('button', { class: 'a-btn primary', type: 'submit', text: isNew ? 'Create service' : 'Save changes' }),
         h('button', { class: 'a-btn', type: 'button', text: 'Cancel', onclick: () => { state.serviceId = null; renderTab(); } })
       )
@@ -983,41 +1128,114 @@
     }
   }
 
+  function renderComments() {
+    const comments = state.data.comments || [];
+    const filters = ['pending', 'approved', 'rejected', 'hidden', 'all'];
+    const filterRow = h('div', { class: 'filter-row', role: 'group', 'aria-label': 'Filter image comments' });
+    filters.forEach((filter) => filterRow.append(h('button', {
+      type: 'button', 'aria-pressed': state.reviewFilter === filter ? 'true' : 'false', text: filter,
+      onclick: () => { state.reviewFilter = filter; renderTab(); }
+    })));
+    const visible = comments.filter((comment) => state.reviewFilter === 'all' || comment.status === state.reviewFilter);
+    dashContent.append(h('section', { class: 'a-card' },
+      h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Project image comments' }), h('p', { text: 'Only approved comments appear publicly. Each comment is tied to an image in a published project.' }))),
+      filterRow,
+      visible.length ? h('div', { class: 'a-list' }, ...visible.map(commentAdminCard)) : h('p', { class: 'a-empty', text: 'No comments in this state.' })
+    ));
+  }
+
+  function commentAdminCard(comment) {
+    const card = h('article', { class: 'review-admin' });
+    const image = h('img', { src: comment.mediaUrl, alt: '', loading: 'lazy', class: 'comment-admin-image' });
+    card.append(
+      h('div', { class: 'review-admin-head' }, h('div', {}, h('strong', { text: comment.displayName }), ' ', chip(comment.status, comment.status)), h('span', { class: 'review-admin-meta', text: formatDate(comment.createdAt) })),
+      h('div', { class: 'comment-admin-body' }, image, h('p', { class: 'review-admin-text', text: comment.text })),
+      h('div', { class: 'review-admin-meta', text: `Project: ${comment.projectTitle} · image: ${comment.mediaUrl}` }),
+      field('Public reply', textarea('reply', comment.reply || '', { rows: 2, maxlength: '1000', placeholder: 'Optional reply shown with the approved comment' }), 'Shown publicly with the comment after approval.'),
+      h('div', { class: 'a-actions' },
+        h('button', { class: 'a-btn a-btn-sm', type: 'button', text: comment.reply ? 'Save reply' : 'Add reply', onclick: () => saveCommentReply(comment.id, card.querySelector('[name="reply"]').value) }),
+        comment.status !== 'approved' ? h('button', { class: 'a-btn a-btn-sm primary', type: 'button', text: 'Approve', onclick: () => setCommentStatus(comment.id, 'approved') }) : null,
+        comment.status !== 'rejected' ? h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Reject', onclick: () => setCommentStatus(comment.id, 'rejected') }) : null,
+        comment.status !== 'hidden' ? h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Hide', onclick: () => setCommentStatus(comment.id, 'hidden') }) : null,
+        h('button', { class: 'a-btn a-btn-sm danger', type: 'button', text: 'Delete', onclick: () => deleteComment(comment) })
+      )
+    );
+    return card;
+  }
+
+  async function setCommentStatus(id, status) {
+    try {
+      await api(`/api/admin/comments/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+      toast(`Image comment ${status}.`);
+      await loadData(); renderTab();
+    } catch (err) { toast(err.message, true); }
+  }
+
+  async function saveCommentReply(id, reply) {
+    try {
+      await api(`/api/admin/comments/${id}`, { method: 'PUT', body: JSON.stringify({ reply }) });
+      toast('Public reply saved.');
+      await loadData(); renderTab();
+    } catch (err) { toast(err.message, true); }
+  }
+
+  async function deleteComment(comment) {
+    if (!confirmAction(`Permanently delete the image comment by ${comment.displayName}?`)) return;
+    try {
+      await api(`/api/admin/comments/${comment.id}`, { method: 'DELETE' });
+      toast('Image comment deleted.');
+      await loadData(); renderTab();
+    } catch (err) { toast(err.message, true); }
+  }
+
   /* --------------------------------- media -------------------------------- */
 
   function renderMedia() {
-    const fileInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', class: 'a-input' });
+    const fileInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime', multiple: true, class: 'a-input' });
     const altInput = input('alt', '', { placeholder: 'Describe the image' });
-    const message = h('p', { class: 'auth-note', text: 'JPEG, PNG, WebP or GIF. Maximum 5 MB.' });
-    const uploadBtn = h('button', { class: 'a-btn primary', type: 'button', text: 'Upload image' });
+    const collectionInput = input('collection', '', { placeholder: 'Collection / album name' });
+    const message = h('p', { class: 'auth-note', text: 'Images up to 20 MB and videos up to 100 MB. Firebase Storage is used when configured.' });
+    const uploadBtn = h('button', { class: 'a-btn primary', type: 'button', text: 'Upload media' });
+    let retryFiles = [];
+
+    fileInput.addEventListener('change', () => {
+      retryFiles = [];
+      uploadBtn.textContent = 'Upload media';
+      message.textContent = 'Images up to 20 MB and videos up to 100 MB. Firebase Storage is used when configured.';
+    });
 
     uploadBtn.addEventListener('click', async () => {
-      const file = fileInput.files && fileInput.files[0];
-      if (!file) {
-        toast('Choose an image first.', true);
+      const files = retryFiles.length ? [...retryFiles] : Array.from(fileInput.files || []);
+      if (!files.length) {
+        toast('Choose one or more images or videos first.', true);
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        toast('Images must be 5 MB or smaller.', true);
+      if (files.some((file) => file.size > (file.type.startsWith('video/') ? 100 : 20) * 1024 * 1024)) {
+        toast('Images must be 20 MB or smaller and videos must be 100 MB or smaller.', true);
         return;
       }
+      retryFiles = [...files];
       uploadBtn.disabled = true;
+      let uploadedCount = 0;
       try {
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('The image could not be read.'));
-          reader.readAsDataURL(file);
-        });
-        await api('/api/admin/media', {
-          method: 'POST',
-          body: JSON.stringify({ filename: file.name, dataUrl, alt: altInput.value })
-        });
-        toast('Image uploaded.');
+        while (retryFiles.length) {
+          const file = retryFiles[0];
+          message.textContent = `Uploading ${file.name} (${uploadedCount + 1} of ${files.length})…`;
+          await uploadMediaFile(file, altInput.value, collectionInput.value);
+          retryFiles.shift();
+          uploadedCount += 1;
+        }
+        toast(`${uploadedCount} media file${uploadedCount === 1 ? '' : 's'} uploaded.`);
+        fileInput.value = '';
+        uploadBtn.textContent = 'Upload media';
+        message.textContent = 'Upload complete.';
         await loadData();
         renderTab();
       } catch (err) {
+        message.textContent = `${uploadedCount} uploaded; ${retryFiles.length} remaining. Select “Retry remaining” to continue. ${err.message}`;
+        uploadBtn.textContent = 'Retry remaining';
         toast(err.message, true);
+        if (uploadedCount) await loadData();
       } finally {
         uploadBtn.disabled = false;
       }
@@ -1025,36 +1243,69 @@
 
     dashContent.append(
       h('section', { class: 'a-card' },
-        h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Media library' }), h('p', { text: 'Uploaded images live in /uploads and can be reused across projects and services.' }))),
+        h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Media library' }), h('p', { text: 'Browse and reuse uploaded images and videos across projects and services.' }))),
         h('div', { class: 'a-form' },
-          h('div', { class: 'row' }, field('Image file', fileInput), field('Alt text', altInput)),
+          h('div', { class: 'row' }, field('Image or video files', fileInput), field('Alt text', altInput), field('Collection / album', collectionInput)),
           message,
           h('div', { class: 'a-actions' }, uploadBtn)
         )
       )
     );
 
+    const search = input('mediaSearch', state.mediaQuery, { placeholder: 'Search filename, alt text or collection' });
+    const kindFilter = select('mediaKind', state.mediaFilter, [{ value: 'all', label: 'All media' }, { value: 'image', label: 'Images' }, { value: 'video', label: 'Videos' }]);
+    const collections = [...new Set(state.data.media.map((item) => String(item.collection || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const collectionFilter = select('mediaCollection', state.mediaCollection, [{ value: 'all', label: 'All albums' }, ...collections.map((name) => ({ value: name, label: name }))]);
     const grid = h('div', { class: 'media-grid' });
-    if (!state.data.media.length) {
-      grid.append(h('p', { class: 'a-empty', text: 'No uploaded media yet.' }));
-    } else {
-      state.data.media.forEach((item) => grid.append(mediaCard(item)));
-    }
-    dashContent.append(h('section', { class: 'a-card' }, h('div', { class: 'a-card-head' }, h('h2', { text: `Library (${state.data.media.length})` })), grid));
+    const countLabel = h('h2', { text: '' });
+    const renderGrid = () => {
+      state.mediaQuery = search.value;
+      state.mediaFilter = kindFilter.value;
+      state.mediaCollection = collectionFilter.value;
+      const query = state.mediaQuery.trim().toLowerCase();
+      const items = state.data.media.filter((item) => {
+        const kind = item.kind || (String(item.mime || '').startsWith('video/') ? 'video' : 'image');
+        return (state.mediaFilter === 'all' || state.mediaFilter === kind) && (state.mediaCollection === 'all' || (item.collection || '') === state.mediaCollection) && (!query || `${item.filename} ${item.alt || ''} ${item.collection || ''}`.toLowerCase().includes(query));
+      });
+      countLabel.textContent = `Library (${items.length} of ${state.data.media.length})`;
+      grid.replaceChildren();
+      if (!items.length) grid.append(h('p', { class: 'a-empty', text: state.data.media.length ? 'No media matches this search.' : 'No uploaded media yet.' }));
+      else items.forEach((item) => grid.append(mediaCard(item)));
+    };
+    search.addEventListener('input', renderGrid);
+    kindFilter.addEventListener('change', renderGrid);
+    collectionFilter.addEventListener('change', renderGrid);
+    renderGrid();
+    dashContent.append(h('section', { class: 'a-card' }, h('div', { class: 'a-card-head' }, countLabel), h('div', { class: 'row media-library-filters' }, field('Search', search), field('Type', kindFilter), field('Album', collectionFilter)), grid));
   }
 
   function mediaCard(item) {
     const alt = input('alt', item.alt || '', { placeholder: 'Alt text' });
-    const replaceInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', hidden: true });
+    const collection = input('collection', item.collection || '', { placeholder: 'Collection / album' });
+    const playback = item.playback || { autoplay: false, loop: false, muted: true, controls: true, playbackRate: 1 };
+    const replaceInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime', hidden: true });
     const actions = h('div', { class: 'media-item-actions' },
       h('button', {
         class: 'a-btn a-btn-sm',
         type: 'button',
-        text: 'Save alt',
+        text: 'Copy URL',
         onclick: async () => {
           try {
-            await api(`/api/admin/media/${item.id}`, { method: 'PUT', body: JSON.stringify({ alt: alt.value }) });
-            toast('Alt text saved.');
+            await navigator.clipboard.writeText(new URL(item.url, location.origin).href);
+            toast('Media URL copied. Paste it into a project gallery to use this media.');
+          } catch (err) {
+            toast('Could not copy this URL. Open the media in a new tab and copy it there.', true);
+          }
+        }
+      }),
+      h('button', {
+        class: 'a-btn a-btn-sm',
+        type: 'button',
+        text: 'Save details',
+        onclick: async () => {
+          try {
+            await api(`/api/admin/media/${item.id}`, { method: 'PUT', body: JSON.stringify({ alt: alt.value, collection: collection.value }) });
+            toast('Media details saved.');
             await loadData();
             renderTab();
           } catch (err) {
@@ -1088,16 +1339,18 @@
     replaceInput.addEventListener('change', async () => {
       const file = replaceInput.files && replaceInput.files[0];
       if (!file) return;
-      if (!confirmAction('Replace this image everywhere it is used? The old file will be removed.')) return;
+      if (!confirmAction('Replace this media everywhere it is used? The old file will be removed.')) return;
+      if (file.size > (file.type.startsWith('video/') ? 100 : 20) * 1024 * 1024) {
+        toast('Images must be 20 MB or smaller and videos must be 100 MB or smaller.', true);
+        return;
+      }
       try {
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('The image could not be read.'));
-          reader.readAsDataURL(file);
+        const uploaded = await uploadMediaFile(file, alt.value, collection.value);
+        await api(`/api/admin/media/${item.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ replacementMediaId: uploaded.media.id, alt: alt.value })
         });
-        await api(`/api/admin/media/${item.id}`, { method: 'PUT', body: JSON.stringify({ dataUrl, alt: alt.value }) });
-        toast('Image replaced.');
+        toast('Media replaced.');
         await loadData();
         renderTab();
       } catch (err) {
@@ -1105,14 +1358,40 @@
       }
     });
 
-    return h('div', { class: 'media-item' },
-      h('img', { src: item.url, alt: '' }),
+    const isVideo = item.kind === 'video' || String(item.mime || '').startsWith('video/');
+    const playbackControls = isVideo
+      ? h('div', { class: 'media-playback' },
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.autoplay, dataset: { playback: 'autoplay' } }), ' Autoplay'),
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.loop, dataset: { playback: 'loop' } }), ' Loop'),
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.muted, dataset: { playback: 'muted' } }), ' Muted'),
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.controls !== false, dataset: { playback: 'controls' } }), ' Controls'),
+          field('Playback speed', select('playbackRate', playback.playbackRate || 1, [0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => ({ value: rate, label: `${rate}×` })))),
+          h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Save playback', onclick: async () => {
+            const settings = {};
+            ['autoplay', 'loop', 'muted', 'controls'].forEach(key => { settings[key] = card.querySelector(`[data-playback="${key}"]`).checked; });
+            settings.playbackRate = Number(card.querySelector('[name="playbackRate"]').value);
+            try {
+              await api(`/api/admin/media/${item.id}`, { method: 'PUT', body: JSON.stringify({ playback: settings }) });
+              toast('Playback settings saved.');
+              await loadData();
+              renderTab();
+            } catch (err) { toast(err.message, true); }
+          } })
+        )
+      : null;
+    const card = h('div', { class: 'media-item' },
+      isVideo
+        ? h('video', { src: item.url, controls: 'controls', preload: 'metadata', playsinline: 'playsinline', 'aria-label': item.filename })
+        : h('img', { src: item.url, alt: item.alt || '' }),
       h('div', { class: 'media-item-body' },
-        alt,
-        h('div', { class: 'media-meta', text: `${item.filename} · ${Math.round(item.size / 1024)} KB` }),
+        h('div', { class: 'row media-card-fields' }, field('Alt text', alt), field('Collection / album', collection)),
+        h('div', { class: 'media-meta', text: `${item.filename} · ${Math.round(item.size / 1024)} KB${item.collection ? ` · ${item.collection}` : ''}` }),
+        item.references && item.references.length ? h('div', { class: 'media-meta', text: `Used in: ${item.references.map((reference) => `${reference.type} ${reference.slug}`).join(', ')}` }) : h('div', { class: 'media-meta', text: 'Not used in a project or service.' }),
+        playbackControls,
         actions
       )
     );
+    return card;
   }
 
   /* ------------------------------- content -------------------------------- */
@@ -1163,9 +1442,9 @@
     };
     const message = h('p', { class: 'auth-note', 'aria-live': 'polite', text: '' });
 
-    const form = h('form', { class: 'a-form' },
-      h('section', { class: 'a-card' },
-        h('div', { class: 'a-card-head' }, h('h2', { text: 'Hero' })),
+    const form = h('form', { class: 'a-form editor-form' },
+      h('details', { class: 'a-card editor-section', open: true },
+        h('summary', { text: 'Hero section' }),
         h('div', { class: 'row' }, field('Eyebrow', fields.eyebrow), field('Availability badge', fields.availabilityBadge)),
         h('div', { class: 'row' }, field('Headline line 1', fields.titleLead), field('Line 2 (small word)', fields.titleBreak), field('Accent word', fields.titleAccent)),
         field('Supporting copy', fields.lede),
@@ -1173,28 +1452,28 @@
         h('div', { class: 'row' }, field('Secondary CTA label', fields.secondaryCtaLabel), field('Secondary CTA link', fields.secondaryCtaHref)),
         field('Hero stats', fields.stats, 'One per line as “Value | Label”. Up to four.')
       ),
-      h('section', { class: 'a-card' },
-        h('div', { class: 'a-card-head' }, h('h2', { text: 'About' })),
+      h('details', { class: 'a-card editor-section' },
+        h('summary', { text: 'About section' }),
         h('div', { class: 'row' }, field('Section label', fields.aboutLabel), field('Title lead', fields.aboutTitleLead), field('Title accent', fields.aboutTitleAccent)),
         field('Biography', fields.aboutLede),
         field('Pull quote', fields.aboutQuote),
         h('div', { class: 'row' }, field('Signature', fields.aboutSignature), field('Signature note', fields.aboutNote)),
         h('div', { class: 'row' }, field('Based in', fields.aboutBased), field('Focus', fields.aboutFocus), field('Status', fields.aboutStatus))
       ),
-      h('section', { class: 'a-card' },
-        h('div', { class: 'a-card-head' }, h('h2', { text: 'Contact' })),
+      h('details', { class: 'a-card editor-section' },
+        h('summary', { text: 'Contact section' }),
         h('div', { class: 'row' }, field('Heading', fields.contactHeading), field('Copy', fields.contactCopy)),
         h('div', { class: 'row' }, field('Email', fields.contactEmail), field('Location', fields.contactLocation)),
         h('div', { class: 'row' }, field('Response time', fields.contactResponse), field('Availability line', fields.contactAvailability), field('Booking note', fields.contactNote))
       ),
-      h('section', { class: 'a-card' },
-        h('div', { class: 'a-card-head' }, h('h2', { text: 'Footer' })),
+      h('details', { class: 'a-card editor-section' },
+        h('summary', { text: 'Footer section' }),
         field('Footer description', fields.footerDescription),
         h('div', { class: 'row' }, field('Location line', fields.footerLocation), field('Statement lead', fields.footerStatementLead), field('Statement accent', fields.footerStatementAccent)),
         h('div', { class: 'row' }, field('Statement note', fields.footerStatementNote), field('Copyright', fields.footerCopyright), field('Built note', fields.footerBuiltNote))
       ),
       message,
-      h('div', { class: 'a-actions' }, h('button', { class: 'a-btn primary', type: 'submit', text: 'Save content' }))
+      h('div', { class: 'a-actions editor-sticky-actions' }, h('button', { class: 'a-btn primary', type: 'submit', text: 'Save content' }))
     );
 
     form.addEventListener('submit', async (event) => {
@@ -1382,6 +1661,94 @@
     dashContent.append(form);
   }
 
+  /* --------------------------- revision history --------------------------- */
+
+  function renderRevisions() {
+    const revisions = state.data.revisions || [];
+    dashContent.append(h('section', { class: 'a-card' },
+      h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Content revisions' }), h('p', { text: 'Project, service and website-content changes are kept as recent snapshots. Restore requires your password and a typed confirmation.' }))),
+      revisions.length ? h('div', { class: 'a-list' }, ...revisions.map(revisionCard)) : h('p', { class: 'a-empty', text: 'No revisions saved yet. The next content edit will create one.' })
+    ));
+  }
+
+  function revisionCard(revision) {
+    const card = h('article', { class: 'review-admin revision-card' });
+    const header = h('div', { class: 'review-admin-head' }, h('div', {}, h('strong', { text: revision.label || revision.entityId }), ' ', chip(revision.type, 'approved')), h('span', { class: 'review-admin-meta', text: `${formatDate(revision.createdAt)} · ${revision.actor}` }));
+    card.append(header);
+    if (revision.before) {
+      card.append(h('div', { class: 'a-actions' },
+        h('button', { class: 'a-btn a-btn-sm', type: 'button', text: state.expandedRevisionId === revision.id ? 'Hide comparison' : 'Compare', onclick: () => { state.expandedRevisionId = state.expandedRevisionId === revision.id ? null : revision.id; renderTab(); } }),
+        h('button', { class: 'a-btn a-btn-sm danger', type: 'button', text: 'Restore this version', onclick: () => restoreRevision(revision) })
+      ));
+      if (state.expandedRevisionId === revision.id) card.append(renderRevisionDiff(revision));
+    } else card.append(h('p', { class: 'a-row-meta', text: 'This is the original creation snapshot; it has no earlier version to restore.' }));
+    return card;
+  }
+
+  function renderRevisionDiff(revision) {
+    const before = revision.before || {};
+    const after = revision.after || {};
+    const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+    const value = (item) => {
+      const text = item === undefined ? '—' : typeof item === 'string' ? item : JSON.stringify(item, null, 2);
+      return String(text).slice(0, 700);
+    };
+    return h('div', { class: 'revision-diff' }, ...keys.map((key) => h('div', { class: 'revision-diff-row' },
+      h('strong', { text: key }),
+      h('pre', { text: `Before\n${value(before[key])}` }),
+      h('pre', { text: `After\n${value(after[key])}` })
+    )));
+  }
+
+  async function restoreRevision(revision) {
+    const currentPassword = window.prompt('Enter your current password to restore this revision.');
+    if (currentPassword === null) return;
+    const confirmation = window.prompt('This will replace the current version. Type RESTORE to continue.');
+    if (confirmation === null) return;
+    try {
+      await api(`/api/admin/revisions/${revision.id}/restore`, { method: 'POST', body: JSON.stringify({ currentPassword, confirmation }) });
+      toast('Revision restored.');
+      state.expandedRevisionId = null;
+      await loadData(); renderTab();
+    } catch (err) { toast(err.message, true); }
+  }
+
+  function renderBackups() {
+    const fileInput = h('input', { type: 'file', accept: 'application/json,.json', class: 'a-input' });
+    const message = h('p', { class: 'auth-note', text: 'A content backup contains projects, services, reviews, comments, media references and site settings. It does not include admin credentials or the media files themselves.' });
+    const restoreButton = h('button', { class: 'a-btn danger', type: 'button', text: 'Restore selected backup' });
+    restoreButton.addEventListener('click', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) { toast('Choose a backup JSON file first.', true); return; }
+      if (file.size > 7.5 * 1024 * 1024) { toast('Backup must be smaller than 7.5 MB.', true); return; }
+      const currentPassword = window.prompt('Enter your current password to restore the backup.');
+      if (currentPassword === null) return;
+      const confirmation = window.prompt('This replaces site content and customer feedback. Type RESTORE to continue.');
+      if (confirmation === null) return;
+      restoreButton.disabled = true;
+      try {
+        const backup = JSON.parse(await file.text());
+        const result = await api('/api/admin/backup/restore', { method: 'POST', body: JSON.stringify({ backup, currentPassword, confirmation }) });
+        toast(`Backup restored: ${result.counts.projects} projects and ${result.counts.services} services.`);
+        await loadData(); renderTab();
+      } catch (err) {
+        toast(err instanceof SyntaxError ? 'The selected file is not valid JSON.' : err.message, true);
+      } finally { restoreButton.disabled = false; }
+    });
+    dashContent.append(
+      h('section', { class: 'a-card' },
+        h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Download backup' }), h('p', { text: 'Save a point-in-time copy outside the website before major changes.' }))),
+        message,
+        h('div', { class: 'a-actions' }, h('a', { class: 'a-btn primary', href: '/api/admin/backup' }, 'Download content backup'))
+      ),
+      h('section', { class: 'a-card' },
+        h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Restore backup' }), h('p', { text: 'Restore overwrites current projects, services, reviews, comments and site settings. Admin accounts and sessions are preserved.' }))),
+        field('Backup JSON file', fileInput),
+        h('div', { class: 'a-actions' }, restoreButton)
+      )
+    );
+  }
+
   /* -------------------------------- account -------------------------------- */
 
   function renderAccount() {
@@ -1423,8 +1790,10 @@
     const resetMfa = h('button', { class: 'a-btn', type: 'button', text: 'Reset authenticator' });
     resetMfa.addEventListener('click', async () => {
       if (!confirmAction('Reset the authenticator? You will need to add the new secret before your next sign-in.')) return;
+      const currentPassword = window.prompt('Enter your current password to reset MFA.');
+      if (currentPassword === null) return;
       try {
-        const result = await api('/api/admin/account/mfa/start', { method: 'POST', body: '{}' });
+        const result = await api('/api/admin/account/mfa/start', { method: 'POST', body: JSON.stringify({ currentPassword }) });
         mfaHost.textContent = '';
         const code = input('code', '', { inputmode: 'numeric', maxlength: '6', placeholder: '6-digit code' });
         const msg = h('p', { class: 'auth-note', text: '' });
@@ -1455,8 +1824,10 @@
             type: 'button',
             text: 'Confirm new authenticator',
             onclick: async () => {
+              const confirmPassword = window.prompt('Confirm your current password to finish the MFA reset.');
+              if (confirmPassword === null) return;
               try {
-                await api('/api/admin/account/mfa/confirm', { method: 'POST', body: JSON.stringify({ code: code.value.trim() }) });
+                await api('/api/admin/account/mfa/confirm', { method: 'POST', body: JSON.stringify({ code: code.value.trim(), currentPassword: confirmPassword }) });
                 toast('Authenticator updated. Other sessions were signed out.');
                 await loadData();
                 renderTab();

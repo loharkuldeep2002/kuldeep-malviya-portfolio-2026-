@@ -58,6 +58,11 @@ function token() {
   return crypto.randomBytes(32).toString('base64url');
 }
 
+function clientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || (req.socket && req.socket.remoteAddress) || 'unknown';
+}
+
 function parseCookies(req) {
   const header = req.headers.cookie || '';
   const out = {};
@@ -118,7 +123,7 @@ function createSession(req, admin, rememberDevice = true) {
     lastSeenAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + (rememberDevice ? REMEMBER_TTL_MS : SESSION_TTL_MS)).toISOString(),
     rememberDevice: Boolean(rememberDevice),
-    ip: req.socket ? req.socket.remoteAddress || '' : '',
+    ip: clientIp(req),
     userAgent: String(req.headers['user-agent'] || '').slice(0, 200)
   };
   db.sessions.push(session);
@@ -209,12 +214,18 @@ function isSameOrigin(req) {
   const origin = req.headers.origin;
   const referer = req.headers.referer;
   const host = req.headers.host;
-  if (!host) return false;
-  const allowed = [`http://${host}`, `https://${host}`];
-  if (origin) return allowed.includes(origin);
-  if (referer) return allowed.some((base) => referer.startsWith(base + '/') || referer === base);
-  // No Origin/Referer: browsers always send one for cross-site form posts.
-  return true;
+  if (!host || (!origin && !referer)) return false;
+  const value = origin || referer;
+  try {
+    const parsed = new URL(value);
+    if (parsed.username || parsed.password) return false;
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    if (parsed.host.toLowerCase() !== String(host).toLowerCase()) return false;
+    if (origin && (parsed.pathname !== '/' || parsed.search || parsed.hash)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 module.exports = {
@@ -227,6 +238,7 @@ module.exports = {
   passwordProblems,
   token,
   sha256,
+  clientIp,
   parseCookies,
   setSessionCookie,
   clearSessionCookie,

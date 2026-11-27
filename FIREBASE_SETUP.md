@@ -87,4 +87,25 @@ On first startup after the import, the admin login page should show **First-time
 
 Firestore rules deny browser reads and writes. The trusted Node server uses Firebase Admin SDK and validates the portfolio admin session before CMS operations. Never switch the rules to public/test access. For a server outside Google Cloud, configure `FIREBASE_SERVICE_ACCOUNT_JSON` as a protected environment secret; never put it in browser assets, `.env.example`, or GitHub.
 
-Uploaded image/file bytes remain under local `uploads/`; moving those files to Firebase Storage is a separate task and may require a billing plan for a new bucket. Firebase database setup does not deploy the Node website; the host must run this Node server and provide the Firestore identity securely. The current `firebase.json` configures Firestore rules/indexes only, not Hosting. Firebase Hosting on Spark serves static files and does not run this Node server. The Vercel Hobby plan is restricted to personal/non-commercial use; check whether that fits this service portfolio before choosing it. A free Node host may sleep or lose uploaded files, so do not treat those limitations as durable production hosting.
+The media library uses server-issued short-lived Google Cloud Storage upload URLs for image and video files. Configure `FIREBASE_STORAGE_BUCKET` in the private environment and keep `DATA_STORE=firestore` so the Firebase Admin app is initialized. The bucket must be enabled, the server identity needs object read/write permissions, and bucket CORS must allow `PUT` from the portfolio origin with `Content-Type` and `x-goog-meta-firebasestoragedownloadtokens` request headers. The Storage Rules file denies direct browser access; the server uses a signed URL for each upload and verifies object type and size before adding it to Firestore. Do not enable a paid bucket or change the Firebase billing plan without approval. Firebase database setup does not deploy the Node website; the host must run this Node server and provide the Firestore identity securely. The current `firebase.json` configures Firestore and Storage rules, not Hosting. Firebase Hosting on Spark serves static files and does not run this Node server. The Vercel Hobby plan is restricted to personal/non-commercial use; check whether that fits this service portfolio before choosing it. A free Node host may sleep or lose local JSON data, so do not treat those limitations as durable production hosting.
+
+## Optional aggregate analytics
+
+Analytics are disabled by default. To enable collection, set `ANALYTICS_ENABLED=true` in the hosting platform's private environment and redeploy only after reviewing the data policy and expected Firestore writes. The dashboard reports aggregate page views, project views, CTA clicks, and validated contact-form intent; it does not count unique visitors or save form fields, email addresses, or raw IP addresses. The server applies a best-effort per-process event limit and retains daily aggregates for 90 days. Because event counts are saved to the configured datastore, each accepted event causes a datastore write; keep this disabled unless that write volume is acceptable.
+
+## Content revisions and backups
+
+Recent project, service, and site-content edits keep bounded snapshots in the settings record (up to 40 revisions, subject to a 700 KiB cap). Revision restore requires the current admin password and explicit `RESTORE` confirmation. A revision cannot bring back an entity that was permanently deleted. Download a JSON backup before a major change. Backups include content and media metadata/references, but not the underlying image/video files, admin accounts, MFA secrets, sessions, or credentials. Restore replaces project/service/review/comment/media metadata and site content/navigation/SEO; admin/security records remain untouched. Verify the restored media files still exist in Storage before publishing.
+
+Example bucket CORS configuration (replace the origin with the exact Preview/Production domains before applying):
+
+```json
+[
+  {
+    "origin": ["https://your-portfolio.example"],
+    "method": ["PUT", "OPTIONS"],
+    "responseHeader": ["Content-Type", "x-goog-resumable", "x-goog-meta-firebasestoragedownloadtokens"],
+    "maxAgeSeconds": 3600
+  }
+]
+```
