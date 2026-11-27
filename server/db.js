@@ -432,6 +432,7 @@ function defaultNav() {
     primary: [
       { label: 'Work', href: '/#work' },
       { label: 'Services', href: '/#services' },
+      { label: 'Client reviews', href: '/reviews' },
       { label: 'About', href: '/#about' },
       { label: 'Contact', href: '/#contact' }
     ],
@@ -442,6 +443,7 @@ function defaultNav() {
           { label: 'Work', href: '/#work' },
           { label: 'Capabilities', href: '/#capabilities' },
           { label: 'Services', href: '/#services' },
+          { label: 'Client reviews', href: '/reviews' },
           { label: 'About', href: '/#about' },
           { label: 'Contact', href: '/#contact' }
         ]
@@ -498,6 +500,7 @@ function createDefaultDb() {
       updatedAt: new Date().toISOString()
     })),
     reviews: [],
+    comments: [],
     media: [],
     content: defaultContent(),
     nav: defaultNav(),
@@ -519,6 +522,7 @@ const MIGRATIONS = [
       db.projects = db.projects || PROJECT_SEED;
       db.services = db.services || SERVICE_SEED;
       db.reviews = db.reviews || [];
+      db.comments = db.comments || [];
       db.media = db.media || [];
       db.content = db.content || defaultContent();
       db.nav = db.nav || defaultNav();

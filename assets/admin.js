@@ -32,12 +32,14 @@
     reviewEditId: null,
     mfaChallenge: null
   };
+  let notificationPollStarted = false;
 
   const TABS = [
     { id: 'overview', label: 'Overview', kicker: 'Dashboard' },
     { id: 'projects', label: 'Projects', kicker: 'Case studies' },
     { id: 'services', label: 'Services', kicker: 'Offer' },
     { id: 'reviews', label: 'Reviews', kicker: 'Moderation' },
+    { id: 'comments', label: 'Image comments', kicker: 'Moderation' },
     { id: 'media', label: 'Media', kicker: 'Library' },
     { id: 'content', label: 'Website content', kicker: 'Copy' },
     { id: 'navigation', label: 'Navigation & footer', kicker: 'Structure' },
@@ -91,6 +93,53 @@
       throw error;
     }
     return payload;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('The file could not be read.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadMediaFile(file, alt) {
+    try {
+      const upload = await api('/api/admin/media/upload-url', {
+        method: 'POST',
+        body: JSON.stringify({ mimeType: file.type, size: file.size })
+      });
+      const response = await fetch(upload.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': upload.mime,
+          'x-goog-meta-firebasestoragedownloadtokens': upload.downloadToken
+        },
+        body: file
+      });
+      if (!response.ok) throw new Error('The file could not be uploaded to Firebase Storage.');
+      return await api('/api/admin/media/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: upload.id,
+          path: upload.path,
+          downloadToken: upload.downloadToken,
+          mime: upload.mime,
+          size: upload.size,
+          filename: file.name,
+          alt
+        })
+      });
+    } catch (error) {
+      const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+      if (!isLocal || error.status !== 503 || !file.type.startsWith('image/')) throw error;
+      if (file.size > 5 * 1024 * 1024) throw new Error('Local fallback supports images up to 5 MB. Configure Firebase Storage for larger files.');
+      return await api('/api/admin/media', {
+        method: 'POST',
+        body: JSON.stringify({ filename: file.name, dataUrl: await readFileAsDataUrl(file), alt })
+      });
+    }
   }
 
   let toastTimer = null;
@@ -159,12 +208,15 @@
   }
 
   function mediaOptions() {
-    return (state.data.media || []).map((item) => ({ value: item.url, label: item.alt || item.filename }));
+    return (state.data.media || [])
+      .filter((item) => item.kind !== 'video' && !String(item.mime || '').startsWith('video/'))
+      .map((item) => ({ value: item.url, label: item.alt || item.filename }));
   }
 
   function mediaPicker(targetInput) {
-    if (!state.data.media.length) return null;
-    const picker = select('mediaPick', '', [{ value: '', label: 'Choose from media library…' }, ...mediaOptions()]);
+    const options = mediaOptions();
+    if (!options.length) return null;
+    const picker = select('mediaPick', '', [{ value: '', label: 'Choose from media library…' }, ...options]);
     picker.addEventListener('change', () => {
       if (picker.value) targetInput.value = picker.value;
     });
@@ -393,6 +445,7 @@
       await loadData();
       booting.hidden = true;
       dashView.hidden = false;
+      startNotificationPolling();
     } catch (err) {
       if (err.status === 401) {
         location.replace(LOGIN_URL);
@@ -416,12 +469,38 @@
     renderTab();
   }
 
+  function startNotificationPolling() {
+    if (notificationPollStarted) return;
+    notificationPollStarted = true;
+    window.setInterval(async () => {
+      if (document.hidden || !state.data) return;
+      try {
+        const latest = await api('/api/admin/session');
+        const prev = state.data.counts || {};
+        const next = latest.counts || {};
+        const newReviews = Math.max(0, (next.pendingReviews || 0) - (prev.pendingReviews || 0));
+        const newComments = Math.max(0, (next.pendingComments || 0) - (prev.pendingComments || 0));
+        state.data = latest;
+        renderNav();
+        if (newReviews || newComments) {
+          const notices = [];
+          if (newReviews) notices.push(`${newReviews} new review${newReviews === 1 ? '' : 's'}`);
+          if (newComments) notices.push(`${newComments} new image comment${newComments === 1 ? '' : 's'}`);
+          toast(`${notices.join(' and ')} awaiting moderation.`);
+        }
+      } catch {}
+    }, 30000);
+  }
+
   function renderNav() {
     dashNav.textContent = '';
     TABS.forEach((tab) => {
       const btn = h('button', { type: 'button', 'aria-current': state.tab === tab.id ? 'true' : 'false' }, tab.label);
       if (tab.id === 'reviews' && state.data && state.data.counts.pendingReviews) {
         btn.append(h('span', { class: 'nav-count', text: String(state.data.counts.pendingReviews) }));
+      }
+      if (tab.id === 'comments' && state.data && state.data.counts.pendingComments) {
+        btn.append(h('span', { class: 'nav-count', text: String(state.data.counts.pendingComments) }));
       }
       btn.addEventListener('click', () => {
         state.tab = tab.id;
@@ -446,6 +525,7 @@
       projects: renderProjects,
       services: renderServices,
       reviews: renderReviews,
+      comments: renderComments,
       media: renderMedia,
       content: renderContent,
       navigation: renderNavigation,
@@ -983,41 +1063,104 @@
     }
   }
 
+  function renderComments() {
+    const comments = state.data.comments || [];
+    const filters = ['pending', 'approved', 'rejected', 'hidden', 'all'];
+    const filterRow = h('div', { class: 'filter-row', role: 'group', 'aria-label': 'Filter image comments' });
+    filters.forEach((filter) => filterRow.append(h('button', {
+      type: 'button', 'aria-pressed': state.reviewFilter === filter ? 'true' : 'false', text: filter,
+      onclick: () => { state.reviewFilter = filter; renderTab(); }
+    })));
+    const visible = comments.filter((comment) => state.reviewFilter === 'all' || comment.status === state.reviewFilter);
+    dashContent.append(h('section', { class: 'a-card' },
+      h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Project image comments' }), h('p', { text: 'Only approved comments appear publicly. Each comment is tied to an image in a published project.' }))),
+      filterRow,
+      visible.length ? h('div', { class: 'a-list' }, ...visible.map(commentAdminCard)) : h('p', { class: 'a-empty', text: 'No comments in this state.' })
+    ));
+  }
+
+  function commentAdminCard(comment) {
+    const card = h('article', { class: 'review-admin' });
+    const image = h('img', { src: comment.mediaUrl, alt: '', loading: 'lazy', class: 'comment-admin-image' });
+    card.append(
+      h('div', { class: 'review-admin-head' }, h('div', {}, h('strong', { text: comment.displayName }), ' ', chip(comment.status, comment.status)), h('span', { class: 'review-admin-meta', text: formatDate(comment.createdAt) })),
+      h('div', { class: 'comment-admin-body' }, image, h('p', { class: 'review-admin-text', text: comment.text })),
+      h('div', { class: 'review-admin-meta', text: `Project: ${comment.projectTitle} · image: ${comment.mediaUrl}` }),
+      field('Public reply', textarea('reply', comment.reply || '', { rows: 2, maxlength: '1000', placeholder: 'Optional reply shown with the approved comment' }), 'Shown publicly with the comment after approval.'),
+      h('div', { class: 'a-actions' },
+        h('button', { class: 'a-btn a-btn-sm', type: 'button', text: comment.reply ? 'Save reply' : 'Add reply', onclick: () => saveCommentReply(comment.id, card.querySelector('[name="reply"]').value) }),
+        comment.status !== 'approved' ? h('button', { class: 'a-btn a-btn-sm primary', type: 'button', text: 'Approve', onclick: () => setCommentStatus(comment.id, 'approved') }) : null,
+        comment.status !== 'rejected' ? h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Reject', onclick: () => setCommentStatus(comment.id, 'rejected') }) : null,
+        comment.status !== 'hidden' ? h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Hide', onclick: () => setCommentStatus(comment.id, 'hidden') }) : null,
+        h('button', { class: 'a-btn a-btn-sm danger', type: 'button', text: 'Delete', onclick: () => deleteComment(comment) })
+      )
+    );
+    return card;
+  }
+
+  async function setCommentStatus(id, status) {
+    try {
+      await api(`/api/admin/comments/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+      toast(`Image comment ${status}.`);
+      await loadData(); renderTab();
+    } catch (err) { toast(err.message, true); }
+  }
+
+  async function saveCommentReply(id, reply) {
+    try {
+      await api(`/api/admin/comments/${id}`, { method: 'PUT', body: JSON.stringify({ reply }) });
+      toast('Public reply saved.');
+      await loadData(); renderTab();
+    } catch (err) { toast(err.message, true); }
+  }
+
+  async function deleteComment(comment) {
+    if (!confirmAction(`Permanently delete the image comment by ${comment.displayName}?`)) return;
+    try {
+      await api(`/api/admin/comments/${comment.id}`, { method: 'DELETE' });
+      toast('Image comment deleted.');
+      await loadData(); renderTab();
+    } catch (err) { toast(err.message, true); }
+  }
+
   /* --------------------------------- media -------------------------------- */
 
   function renderMedia() {
-    const fileInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', class: 'a-input' });
+    const fileInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime', multiple: true, class: 'a-input' });
     const altInput = input('alt', '', { placeholder: 'Describe the image' });
-    const message = h('p', { class: 'auth-note', text: 'JPEG, PNG, WebP or GIF. Maximum 5 MB.' });
-    const uploadBtn = h('button', { class: 'a-btn primary', type: 'button', text: 'Upload image' });
+    const message = h('p', { class: 'auth-note', text: 'Images up to 20 MB and videos up to 100 MB. Firebase Storage is used when configured.' });
+    const uploadBtn = h('button', { class: 'a-btn primary', type: 'button', text: 'Upload media' });
 
     uploadBtn.addEventListener('click', async () => {
-      const file = fileInput.files && fileInput.files[0];
-      if (!file) {
-        toast('Choose an image first.', true);
+      const files = Array.from(fileInput.files || []);
+      if (!files.length) {
+        toast('Choose one or more images or videos first.', true);
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        toast('Images must be 5 MB or smaller.', true);
+      if (files.some((file) => file.size > (file.type.startsWith('video/') ? 100 : 20) * 1024 * 1024)) {
+        toast('Images must be 20 MB or smaller and videos must be 100 MB or smaller.', true);
         return;
       }
       uploadBtn.disabled = true;
+      let uploadedCount = 0;
       try {
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('The image could not be read.'));
-          reader.readAsDataURL(file);
-        });
-        await api('/api/admin/media', {
-          method: 'POST',
-          body: JSON.stringify({ filename: file.name, dataUrl, alt: altInput.value })
-        });
-        toast('Image uploaded.');
+        for (const file of files) {
+          message.textContent = `Uploading ${file.name} (${uploadedCount + 1} of ${files.length})…`;
+          await uploadMediaFile(file, altInput.value);
+          uploadedCount += 1;
+        }
+        toast(`${uploadedCount} media file${uploadedCount === 1 ? '' : 's'} uploaded.`);
+        fileInput.value = '';
         await loadData();
         renderTab();
       } catch (err) {
-        toast(err.message, true);
+        if (uploadedCount) {
+          message.textContent = `${uploadedCount} file${uploadedCount === 1 ? '' : 's'} uploaded; the next file failed: ${err.message}`;
+          await loadData();
+          renderTab();
+        } else {
+          toast(err.message, true);
+        }
       } finally {
         uploadBtn.disabled = false;
       }
@@ -1025,9 +1168,9 @@
 
     dashContent.append(
       h('section', { class: 'a-card' },
-        h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Media library' }), h('p', { text: 'Uploaded images live in /uploads and can be reused across projects and services.' }))),
+        h('div', { class: 'a-card-head' }, h('div', {}, h('h2', { text: 'Media library' }), h('p', { text: 'Browse and reuse uploaded images and videos across projects and services.' }))),
         h('div', { class: 'a-form' },
-          h('div', { class: 'row' }, field('Image file', fileInput), field('Alt text', altInput)),
+          h('div', { class: 'row' }, field('Image or video files', fileInput), field('Alt text', altInput)),
           message,
           h('div', { class: 'a-actions' }, uploadBtn)
         )
@@ -1045,8 +1188,22 @@
 
   function mediaCard(item) {
     const alt = input('alt', item.alt || '', { placeholder: 'Alt text' });
-    const replaceInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', hidden: true });
+    const playback = item.playback || { autoplay: false, loop: false, muted: true, controls: true, playbackRate: 1 };
+    const replaceInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime', hidden: true });
     const actions = h('div', { class: 'media-item-actions' },
+      h('button', {
+        class: 'a-btn a-btn-sm',
+        type: 'button',
+        text: 'Copy URL',
+        onclick: async () => {
+          try {
+            await navigator.clipboard.writeText(new URL(item.url, location.origin).href);
+            toast('Media URL copied. Paste it into a project gallery to use this media.');
+          } catch (err) {
+            toast('Could not copy this URL. Open the media in a new tab and copy it there.', true);
+          }
+        }
+      }),
       h('button', {
         class: 'a-btn a-btn-sm',
         type: 'button',
@@ -1088,16 +1245,18 @@
     replaceInput.addEventListener('change', async () => {
       const file = replaceInput.files && replaceInput.files[0];
       if (!file) return;
-      if (!confirmAction('Replace this image everywhere it is used? The old file will be removed.')) return;
+      if (!confirmAction('Replace this media everywhere it is used? The old file will be removed.')) return;
+      if (file.size > (file.type.startsWith('video/') ? 100 : 20) * 1024 * 1024) {
+        toast('Images must be 20 MB or smaller and videos must be 100 MB or smaller.', true);
+        return;
+      }
       try {
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('The image could not be read.'));
-          reader.readAsDataURL(file);
+        const uploaded = await uploadMediaFile(file, alt.value);
+        await api(`/api/admin/media/${item.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ replacementMediaId: uploaded.media.id, alt: alt.value })
         });
-        await api(`/api/admin/media/${item.id}`, { method: 'PUT', body: JSON.stringify({ dataUrl, alt: alt.value }) });
-        toast('Image replaced.');
+        toast('Media replaced.');
         await loadData();
         renderTab();
       } catch (err) {
@@ -1105,14 +1264,39 @@
       }
     });
 
-    return h('div', { class: 'media-item' },
-      h('img', { src: item.url, alt: '' }),
+    const isVideo = item.kind === 'video' || String(item.mime || '').startsWith('video/');
+    const playbackControls = isVideo
+      ? h('div', { class: 'media-playback' },
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.autoplay, dataset: { playback: 'autoplay' } }), ' Autoplay'),
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.loop, dataset: { playback: 'loop' } }), ' Loop'),
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.muted, dataset: { playback: 'muted' } }), ' Muted'),
+          h('label', {}, h('input', { type: 'checkbox', checked: playback.controls !== false, dataset: { playback: 'controls' } }), ' Controls'),
+          field('Playback speed', select('playbackRate', playback.playbackRate || 1, [0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => ({ value: rate, label: `${rate}×` })))),
+          h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Save playback', onclick: async () => {
+            const settings = {};
+            ['autoplay', 'loop', 'muted', 'controls'].forEach(key => { settings[key] = card.querySelector(`[data-playback="${key}"]`).checked; });
+            settings.playbackRate = Number(card.querySelector('[name="playbackRate"]').value);
+            try {
+              await api(`/api/admin/media/${item.id}`, { method: 'PUT', body: JSON.stringify({ playback: settings }) });
+              toast('Playback settings saved.');
+              await loadData();
+              renderTab();
+            } catch (err) { toast(err.message, true); }
+          } })
+        )
+      : null;
+    const card = h('div', { class: 'media-item' },
+      isVideo
+        ? h('video', { src: item.url, controls: 'controls', preload: 'metadata', playsinline: 'playsinline', 'aria-label': item.filename })
+        : h('img', { src: item.url, alt: item.alt || '' }),
       h('div', { class: 'media-item-body' },
         alt,
         h('div', { class: 'media-meta', text: `${item.filename} · ${Math.round(item.size / 1024)} KB` }),
+        playbackControls,
         actions
       )
     );
+    return card;
   }
 
   /* ------------------------------- content -------------------------------- */
@@ -1423,8 +1607,10 @@
     const resetMfa = h('button', { class: 'a-btn', type: 'button', text: 'Reset authenticator' });
     resetMfa.addEventListener('click', async () => {
       if (!confirmAction('Reset the authenticator? You will need to add the new secret before your next sign-in.')) return;
+      const currentPassword = window.prompt('Enter your current password to reset MFA.');
+      if (currentPassword === null) return;
       try {
-        const result = await api('/api/admin/account/mfa/start', { method: 'POST', body: '{}' });
+        const result = await api('/api/admin/account/mfa/start', { method: 'POST', body: JSON.stringify({ currentPassword }) });
         mfaHost.textContent = '';
         const code = input('code', '', { inputmode: 'numeric', maxlength: '6', placeholder: '6-digit code' });
         const msg = h('p', { class: 'auth-note', text: '' });
@@ -1455,8 +1641,10 @@
             type: 'button',
             text: 'Confirm new authenticator',
             onclick: async () => {
+              const confirmPassword = window.prompt('Confirm your current password to finish the MFA reset.');
+              if (confirmPassword === null) return;
               try {
-                await api('/api/admin/account/mfa/confirm', { method: 'POST', body: JSON.stringify({ code: code.value.trim() }) });
+                await api('/api/admin/account/mfa/confirm', { method: 'POST', body: JSON.stringify({ code: code.value.trim(), currentPassword: confirmPassword }) });
                 toast('Authenticator updated. Other sessions were signed out.');
                 await loadData();
                 renderTab();

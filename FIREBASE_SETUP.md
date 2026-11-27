@@ -87,4 +87,17 @@ On first startup after the import, the admin login page should show **First-time
 
 Firestore rules deny browser reads and writes. The trusted Node server uses Firebase Admin SDK and validates the portfolio admin session before CMS operations. Never switch the rules to public/test access. For a server outside Google Cloud, configure `FIREBASE_SERVICE_ACCOUNT_JSON` as a protected environment secret; never put it in browser assets, `.env.example`, or GitHub.
 
-Uploaded image/file bytes remain under local `uploads/`; moving those files to Firebase Storage is a separate task and may require a billing plan for a new bucket. Firebase database setup does not deploy the Node website; the host must run this Node server and provide the Firestore identity securely. The current `firebase.json` configures Firestore rules/indexes only, not Hosting. Firebase Hosting on Spark serves static files and does not run this Node server. The Vercel Hobby plan is restricted to personal/non-commercial use; check whether that fits this service portfolio before choosing it. A free Node host may sleep or lose uploaded files, so do not treat those limitations as durable production hosting.
+The media library uses server-issued short-lived Google Cloud Storage upload URLs for image and video files. Configure `FIREBASE_STORAGE_BUCKET` in the private environment and keep `DATA_STORE=firestore` so the Firebase Admin app is initialized. The bucket must be enabled, the server identity needs object read/write permissions, and bucket CORS must allow `PUT` from the portfolio origin with `Content-Type` and `x-goog-meta-firebasestoragedownloadtokens` request headers. The Storage Rules file denies direct browser access; the server uses a signed URL for each upload and verifies object type and size before adding it to Firestore. Do not enable a paid bucket or change the Firebase billing plan without approval. Firebase database setup does not deploy the Node website; the host must run this Node server and provide the Firestore identity securely. The current `firebase.json` configures Firestore and Storage rules, not Hosting. Firebase Hosting on Spark serves static files and does not run this Node server. The Vercel Hobby plan is restricted to personal/non-commercial use; check whether that fits this service portfolio before choosing it. A free Node host may sleep or lose local JSON data, so do not treat those limitations as durable production hosting.
+
+Example bucket CORS configuration (replace the origin with the exact Preview/Production domains before applying):
+
+```json
+[
+  {
+    "origin": ["https://your-portfolio.example"],
+    "method": ["PUT", "OPTIONS"],
+    "responseHeader": ["Content-Type", "x-goog-resumable", "x-goog-meta-firebasestoragedownloadtokens"],
+    "maxAgeSeconds": 3600
+  }
+]
+```

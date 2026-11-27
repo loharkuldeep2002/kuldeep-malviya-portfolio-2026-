@@ -12,7 +12,6 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const url = require('url');
 
 const { handleApi, UPLOAD_DIR } = require('./server/api');
 const dbModule = require('./server/db');
@@ -55,8 +54,9 @@ const SECURITY_HEADERS = {
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data:",
-    "connect-src 'self'",
+    "img-src 'self' data: https://firebasestorage.googleapis.com",
+    "media-src 'self' blob: https://firebasestorage.googleapis.com",
+    "connect-src 'self' https://storage.googleapis.com https://*.storage.googleapis.com",
     "form-action 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
@@ -102,7 +102,8 @@ function siteOrigin(req) {
 /* --------------------------------- server --------------------------------- */
 
 async function handleRequest(req, res) {
-  const parsed = url.parse(req.url, true);
+  const parsedUrl = new URL(req.url, 'http://localhost');
+  const parsed = { pathname: parsedUrl.pathname, query: Object.fromEntries(parsedUrl.searchParams) };
   let pathname = parsed.pathname || '/';
   if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
 
@@ -137,7 +138,7 @@ async function handleRequest(req, res) {
       return sendFile(res, path.join(ROOT, 'project.html'));
     }
 
-    if (pathname === '/services' || pathname === '/contact') {
+    if (pathname === '/services' || pathname === '/contact' || pathname === '/reviews') {
       return sendFile(res, path.join(ROOT, pathname.slice(1) + '.html'));
     }
 
@@ -161,7 +162,7 @@ async function handleRequest(req, res) {
       const publishedProjects = db.projects.filter((p) => p.status === 'published' && !p.archived);
       const publishedServices = db.services.filter((s) => s.status === 'published' && !s.archived);
       const urls = [
-        `${origin}/`, `${origin}/services`, `${origin}/contact`,
+        `${origin}/`, `${origin}/services`, `${origin}/contact`, `${origin}/reviews`,
         ...publishedProjects.map((p) => `${origin}/project/${p.slug}`),
         ...publishedServices.map((s) => `${origin}/services/${s.slug}`)
       ];
@@ -222,7 +223,7 @@ function initializeOnce() {
 }
 
 async function handleIncoming(req, res) {
-  const pathname = url.parse(req.url).pathname || '/';
+  const pathname = new URL(req.url, 'http://localhost').pathname || '/';
   const stateful = pathname.startsWith('/api/') || pathname.startsWith('/admin') || ['/robots.txt', '/sitemap.xml'].includes(pathname);
   const result = dbModule.usesRemoteStore() && stateful
     ? dbModule.withRequest(() => handleRequest(req, res)) : handleRequest(req, res);

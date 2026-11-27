@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { isDeepStrictEqual } = require('util');
 
 const COLLECTIONS = {
-  projects: 'projects', services: 'services', reviews: 'reviews', media: 'media',
+  projects: 'projects', services: 'services', reviews: 'reviews', comments: 'comments', media: 'media',
   admins: 'admin_users', sessions: 'sessions', mfaChallenges: 'mfa_challenges',
   attempts: 'login_attempts', activity: 'activity_logs'
 };

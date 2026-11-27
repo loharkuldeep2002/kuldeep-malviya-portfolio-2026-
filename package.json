@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
+    "test": "node --test",
     "firebase:check": "node scripts/migrate-firestore.js --check",
     "firebase:preview": "node scripts/migrate-firestore.js --dry-run",
     "firebase:apply": "node scripts/migrate-firestore.js --apply"

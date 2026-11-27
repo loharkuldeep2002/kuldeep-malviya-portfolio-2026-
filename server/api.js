@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const dbModule = require('./db');
 const auth = require('./auth');
 const totp = require('./totp');
+const mediaStorage = require('./storage');
 
 const ROOT = dbModule.ROOT;
 const UPLOAD_DIR = path.join(ROOT, 'uploads');
@@ -136,6 +137,26 @@ function approvedReviews(projectSlug) {
     .map(publicReview);
 }
 
+function publicComment(comment) {
+  return {
+    id: comment.id,
+    projectSlug: comment.projectSlug,
+    projectTitle: comment.projectTitle,
+    mediaUrl: comment.mediaUrl,
+    displayName: comment.displayName,
+    text: comment.text,
+    reply: comment.reply || '',
+    createdAt: comment.createdAt
+  };
+}
+
+function approvedComments(projectSlug) {
+  return dbModule.load().comments
+    .filter((comment) => comment.status === 'approved' && (!projectSlug || comment.projectSlug === projectSlug))
+    .sort((a, b) => new Date(b.approvedAt || b.createdAt) - new Date(a.approvedAt || a.createdAt))
+    .map(publicComment);
+}
+
 function ratingSummary(reviews) {
   if (!reviews.length) return { average: 0, count: 0 };
   const total = reviews.reduce((sum, r) => sum + r.rating, 0);
@@ -194,11 +215,6 @@ function sortByOrder(list) {
   return list.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.title || a.name).localeCompare(String(b.title || b.name)));
 }
 
-function clientIp(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return forwarded || (req.socket && req.socket.remoteAddress) || 'unknown';
-}
-
 function requireBootstrapToken(req) {
   const expected = String(process.env.ADMIN_BOOTSTRAP_TOKEN || '');
   const supplied = String(req.headers['x-admin-bootstrap-token'] || '');
@@ -244,10 +260,12 @@ function normalizeProject(input, existing) {
         .map((item) => {
           if (typeof item === 'string') {
             const url = safeUrl(item, { allowMail: false });
-            return url ? { url, alt: '' } : null;
+            const media = db.media.find((entry) => entry.url === url);
+            return url ? { url, alt: '', kind: media?.kind || 'image', playback: media?.playback || null } : null;
           }
           const url = safeUrl(item && item.url, { allowMail: false });
-          return url ? { url, alt: str(item.alt, 200) } : null;
+          const media = db.media.find((entry) => entry.url === url);
+          return url ? { url, alt: str(item.alt, 200), kind: media?.kind || 'image', playback: media?.playback || null } : null;
         })
         .filter(Boolean)
         .slice(0, 20)
@@ -451,9 +469,11 @@ function projectPayload(req, slug) {
   }
   const services = sortByOrder(db.services.filter((s) => s.status === 'published' && !s.archived));
   const reviews = approvedReviews(project.slug);
+  const comments = approvedComments(project.slug);
   return {
     project: publicProject(project, services),
     reviews,
+    comments,
     rating: ratingSummary(reviews),
     preview: isPreview && (project.status !== 'published' || project.archived)
   };
@@ -540,6 +560,49 @@ function submitReview(req, body) {
   return { ok: true, message: 'Thanks — your review is awaiting approval.', id: review.id };
 }
 
+function submitComment(req, body) {
+  const db = dbModule.load();
+  if (str(body.website, 100)) throw new HttpError(400, 'Comment could not be submitted.');
+  const projectSlug = slugify(body.projectSlug);
+  const mediaUrl = safeUrl(body.mediaUrl, { allowMail: false });
+  const displayName = str(body.displayName, 40);
+  const text = str(body.text, 1000);
+  if (displayName.length < 2 || /@[^\s@]+\.[^\s@]{2,}/.test(displayName) || /https?:\/\//i.test(displayName)) {
+    throw new HttpError(422, 'Enter a display name of at least 2 characters without links or email addresses.');
+  }
+  if (text.length < 3) throw new HttpError(422, 'Please write at least 3 characters.');
+  if (body.consent !== true) throw new HttpError(422, 'Please confirm that your comment may be displayed after moderation.');
+  const project = db.projects.find((item) => item.slug === projectSlug && item.status === 'published' && !item.archived);
+  if (!project) throw new HttpError(422, 'Choose a published project.');
+  const images = [project.cover, ...(project.gallery || []).map((item) => item.url)].filter(Boolean);
+  if (!mediaUrl || !images.includes(mediaUrl)) throw new HttpError(422, 'Choose an image from this project.');
+  const hash = ipHash(req);
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const recent = db.comments.filter((comment) => comment.ipHash === hash && new Date(comment.createdAt).getTime() > dayAgo);
+  if (recent.length >= 10) throw new HttpError(429, 'You have submitted several comments today. Please try again later.');
+  if (recent.some((comment) => comment.text.toLowerCase() === text.toLowerCase())) throw new HttpError(429, 'This comment has already been submitted.');
+  const comment = {
+    id: dbModule.uid('cmt_'),
+    projectSlug: project.slug,
+    projectTitle: project.title,
+    mediaUrl,
+    displayName,
+    text,
+    consent: true,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    approvedAt: null,
+    moderatedAt: null,
+    moderatedBy: null,
+    ipHash: hash,
+    userAgent: String(req.headers['user-agent'] || '').slice(0, 200)
+  };
+  db.comments.unshift(comment);
+  audit('visitor', 'comment.submitted', 'comment', comment.id, `${project.slug}:${mediaUrl}`);
+  return { ok: true, message: 'Thanks — your comment is awaiting approval.', id: comment.id };
+}
+
 /* ------------------------------- admin API ------------------------------- */
 
 function requireAdminOrThrow(req) {
@@ -577,6 +640,19 @@ function adminSnapshot(found) {
       updatedAt: r.updatedAt,
       moderatedAt: r.moderatedAt
     })),
+    comments: db.comments.map((comment) => ({
+      id: comment.id,
+      projectSlug: comment.projectSlug,
+      projectTitle: comment.projectTitle,
+      mediaUrl: comment.mediaUrl,
+      displayName: comment.displayName,
+      text: comment.text,
+      reply: comment.reply || '',
+      consent: comment.consent,
+      status: comment.status,
+      createdAt: comment.createdAt,
+      moderatedAt: comment.moderatedAt
+    })),
     media: db.media,
     content: db.content,
     nav: db.nav,
@@ -599,6 +675,7 @@ function adminSnapshot(found) {
       services: services.filter((s) => !s.archived).length,
       publishedServices: services.filter((s) => s.status === 'published' && !s.archived).length,
       pendingReviews: db.reviews.filter((r) => r.status === 'pending').length,
+      pendingComments: db.comments.filter((comment) => comment.status === 'pending').length,
       approvedReviews: db.reviews.filter((r) => r.status === 'approved').length,
       media: db.media.length
     }
@@ -705,12 +782,18 @@ function mediaReferences(url) {
   return refs;
 }
 
-function replaceUrlEverywhere(oldUrl, newUrl) {
+function replaceUrlEverywhere(oldUrl, newUrl, mediaInfo = null) {
   const db = dbModule.load();
   db.projects.forEach((p) => {
     if (p.cover === oldUrl) p.cover = newUrl;
     (p.gallery || []).forEach((img) => {
-      if (img.url === oldUrl) img.url = newUrl;
+      if (img.url === oldUrl) {
+        img.url = newUrl;
+        if (mediaInfo) {
+          img.kind = mediaInfo.kind;
+          img.playback = mediaInfo.playback || null;
+        }
+      }
     });
   });
   db.services.forEach((s) => {
@@ -798,7 +881,7 @@ async function handleAdminApi(req, res, url) {
     const body = await readJson(req);
     const email = str(body.email, 160).toLowerCase();
     const password = typeof body.password === 'string' ? body.password : '';
-    const key = auth.attemptKey(email, clientIp(req));
+    const key = auth.attemptKey(email, auth.clientIp(req));
     const lock = auth.lockState(key);
     if (lock.locked) {
       throw new HttpError(429, `Too many attempts. Try again in ${Math.ceil(lock.remaining / 60)} minute(s).`);
@@ -811,7 +894,11 @@ async function handleAdminApi(req, res, url) {
       throw new HttpError(401, 'Email or password is incorrect.');
     }
     auth.clearFailures(key);
-    if (admin.mfaEnabled) {
+    if (!admin.mfaEnabled || !admin.totpSecret) {
+      await dbModule.save();
+      throw new HttpError(403, 'Authenticator MFA is required for this administrator. Use the secure recovery process to restore MFA.');
+    }
+    {
       const raw = auth.token();
       db.mfaChallenges.push({
         id: dbModule.uid('mfa_'),
@@ -969,6 +1056,45 @@ async function handleAdminApi(req, res, url) {
     await dbModule.save();
     return sendJson(res, 200, { review });
   }
+  const commentStatusMatch = /^\/api\/admin\/comments\/([^/]+)\/status$/.exec(p);
+  if (commentStatusMatch && req.method === 'POST') {
+    const db = dbModule.load();
+    const comment = db.comments.find((entry) => entry.id === commentStatusMatch[1]);
+    if (!comment) throw new HttpError(404, 'Comment not found.');
+    const body = await readJson(req);
+    const status = ['pending', 'approved', 'rejected', 'hidden'].includes(body.status) ? body.status : null;
+    if (!status) throw new HttpError(422, 'Unknown comment status.');
+    comment.status = status;
+    comment.updatedAt = new Date().toISOString();
+    comment.moderatedAt = comment.updatedAt;
+    comment.moderatedBy = found.admin.email;
+    if (status === 'approved') comment.approvedAt = comment.updatedAt;
+    audit(found.admin.email, `comment.${status}`, 'comment', comment.id, comment.projectSlug);
+    await dbModule.save();
+    return sendJson(res, 200, { comment });
+  }
+  const commentMatch = /^\/api\/admin\/comments\/([^/]+)$/.exec(p);
+  if (commentMatch && req.method === 'DELETE') {
+    const db = dbModule.load();
+    const comment = db.comments.find((entry) => entry.id === commentMatch[1]);
+    if (!comment) throw new HttpError(404, 'Comment not found.');
+    db.comments = db.comments.filter((entry) => entry.id !== comment.id);
+    audit(found.admin.email, 'comment.deleted', 'comment', comment.id, comment.projectSlug);
+    await dbModule.save();
+    return sendJson(res, 200, { ok: true });
+  }
+  if (commentMatch && req.method === 'PUT') {
+    const db = dbModule.load();
+    const comment = db.comments.find((entry) => entry.id === commentMatch[1]);
+    if (!comment) throw new HttpError(404, 'Comment not found.');
+    const body = await readJson(req);
+    const reply = str(body.reply, 1000);
+    comment.reply = reply;
+    comment.updatedAt = new Date().toISOString();
+    audit(found.admin.email, 'comment.replied', 'comment', comment.id, comment.projectSlug);
+    await dbModule.save();
+    return sendJson(res, 200, { comment });
+  }
   const reviewMatch = /^\/api\/admin\/reviews\/([^/]+)$/.exec(p);
   if (reviewMatch) {
     const db = dbModule.load();
@@ -1039,6 +1165,53 @@ async function handleAdminApi(req, res, url) {
     await dbModule.save();
     return sendJson(res, 201, { media: item });
   }
+  if (p === '/api/admin/media/upload-url' && req.method === 'POST') {
+    const body = await readJson(req, 16 * 1024);
+    const upload = await mediaStorage.createUpload({
+      adminId: found.admin.id,
+      mimeType: body.mimeType,
+      size: body.size
+    });
+    return sendJson(res, 201, {
+      id: upload.id,
+      path: upload.path,
+      uploadUrl: upload.uploadUrl,
+      downloadToken: upload.downloadToken,
+      mime: upload.mime,
+      size: upload.size,
+      kind: upload.kind,
+      expiresAt: upload.expiresAt
+    });
+  }
+  if (p === '/api/admin/media/complete' && req.method === 'POST') {
+    const body = await readJson(req, 16 * 1024);
+    const verified = await mediaStorage.verifyUpload({
+      adminId: found.admin.id,
+      id: str(body.id, 64),
+      path: str(body.path, 240),
+      downloadToken: str(body.downloadToken, 64),
+      mime: str(body.mime, 120),
+      size: body.size
+    });
+    const item = {
+      id: dbModule.uid('med_'),
+      filename: str(body.filename, 180) || `${body.id}.${verified.mime.split('/')[1]}`,
+      url: verified.url,
+      storagePath: verified.path,
+      mime: verified.mime,
+      kind: verified.kind,
+      size: verified.size,
+      playback: verified.kind === 'video' ? { autoplay: false, loop: false, muted: true, controls: true, playbackRate: 1 } : null,
+      alt: str(body.alt, 200),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const db = dbModule.load();
+    db.media.unshift(item);
+    audit(found.admin.email, 'media.uploaded', 'media', item.id, `${item.kind}:${item.filename}`);
+    await dbModule.save();
+    return sendJson(res, 201, { media: item });
+  }
   const mediaMatch = /^\/api\/admin\/media\/([^/]+)$/.exec(p);
   if (mediaMatch) {
     const db = dbModule.load();
@@ -1047,6 +1220,45 @@ async function handleAdminApi(req, res, url) {
     if (req.method === 'PUT') {
       const body = await readJson(req, MAX_UPLOAD_JSON);
       if (body.alt !== undefined) item.alt = str(body.alt, 200);
+      if (body.playback !== undefined) {
+        if ((item.kind || '').toLowerCase() !== 'video') throw new HttpError(422, 'Playback settings are only available for videos.');
+        const playback = body.playback && typeof body.playback === 'object' ? body.playback : {};
+        const rate = Number(playback.playbackRate);
+        if (![0.5, 0.75, 1, 1.25, 1.5, 2].includes(rate)) throw new HttpError(422, 'Choose a supported playback speed.');
+        item.playback = {
+          autoplay: playback.autoplay === true,
+          loop: playback.loop === true,
+          muted: playback.muted === true,
+          controls: playback.controls !== false,
+          playbackRate: rate
+        };
+      }
+      if (body.replacementMediaId) {
+        const replacement = db.media.find((candidate) => candidate.id === str(body.replacementMediaId, 80));
+        if (!replacement || replacement.id === item.id) throw new HttpError(404, 'Replacement media item not found.');
+        const currentKind = item.kind || (String(item.mime || '').startsWith('video/') ? 'video' : 'image');
+        const replacementKind = replacement.kind || (String(replacement.mime || '').startsWith('video/') ? 'video' : 'image');
+        if (currentKind !== replacementKind) throw new HttpError(422, 'Replace media with a file of the same type.');
+        const oldStoragePath = item.storagePath;
+        const oldUrl = item.url;
+        Object.assign(item, {
+          filename: replacement.filename,
+          url: replacement.url,
+          storagePath: replacement.storagePath || '',
+          mime: replacement.mime,
+          kind: replacementKind,
+          size: replacement.size,
+          playback: replacement.playback || null,
+          updatedAt: new Date().toISOString()
+        });
+        db.media = db.media.filter((candidate) => candidate.id !== replacement.id);
+        replaceUrlEverywhere(oldUrl, item.url, { kind: item.kind, playback: item.playback });
+        audit(found.admin.email, 'media.replaced', 'media', item.id, item.filename);
+        await dbModule.save();
+        if (oldStoragePath) await mediaStorage.deleteObject(oldStoragePath).catch(() => {});
+        deleteUploadFile(oldUrl);
+        return sendJson(res, 200, { media: item });
+      }
       if (body.dataUrl) {
         const { buffer, ext, mime } = decodeUpload(body);
         const oldUrl = item.url;
@@ -1069,6 +1281,7 @@ async function handleAdminApi(req, res, url) {
       if (refs.length && !force) {
         throw new HttpError(409, 'This image is still in use. Replace it or remove those references first.', { references: refs });
       }
+      if (item.storagePath) await mediaStorage.deleteObject(item.storagePath);
       db.media = db.media.filter((m) => m.id !== item.id);
       deleteUploadFile(item.url);
       audit(found.admin.email, 'media.deleted', 'media', item.id, item.filename);
@@ -1097,6 +1310,10 @@ async function handleAdminApi(req, res, url) {
 
   if (p === '/api/admin/account/mfa/start' && req.method === 'POST') {
     const db = dbModule.load();
+    const body = await readJson(req);
+    if (!auth.verifyPassword(String(body.currentPassword || ''), found.admin.passwordHash)) {
+      throw new HttpError(401, 'Current password is incorrect.');
+    }
     const secret = totp.generateSecret();
     found.admin.pendingTotpSecret = secret;
     await dbModule.save();
@@ -1109,6 +1326,9 @@ async function handleAdminApi(req, res, url) {
   if (p === '/api/admin/account/mfa/confirm' && req.method === 'POST') {
     const db = dbModule.load();
     const body = await readJson(req);
+    if (!auth.verifyPassword(String(body.currentPassword || ''), found.admin.passwordHash)) {
+      throw new HttpError(401, 'Current password is incorrect.');
+    }
     if (!found.admin.pendingTotpSecret) throw new HttpError(400, 'Start the authenticator reset first.');
     if (!totp.verifyTotp(found.admin.pendingTotpSecret, body.code)) {
       throw new HttpError(422, 'That authenticator code is not valid.');
@@ -1167,10 +1387,30 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, servicePayload(req, serviceMatch[1]));
     }
 
+    if (url.pathname === '/api/reviews' && req.method === 'GET') {
+      const approved = dbModule.load().reviews
+        .filter((review) => review.status === 'approved')
+        .sort((a, b) => new Date(b.approvedAt || b.createdAt) - new Date(a.approvedAt || a.createdAt))
+        .map(publicReview);
+      return sendJson(res, 200, { reviews: approved, rating: ratingSummary(approved) });
+    }
+
+    if (url.pathname === '/api/comments' && req.method === 'GET') {
+      return sendJson(res, 200, { comments: approvedComments() });
+    }
+
     if (url.pathname === '/api/reviews' && req.method === 'POST') {
       if (!auth.isSameOrigin(req)) throw new HttpError(403, 'Cross-origin requests are not allowed.');
       const body = await readJson(req, 32 * 1024);
       const result = submitReview(req, body);
+      await dbModule.save();
+      return sendJson(res, 201, result);
+    }
+
+    if (url.pathname === '/api/comments' && req.method === 'POST') {
+      if (!auth.isSameOrigin(req)) throw new HttpError(403, 'Cross-origin requests are not allowed.');
+      const body = await readJson(req, 32 * 1024);
+      const result = submitComment(req, body);
       await dbModule.save();
       return sendJson(res, 201, result);
     }

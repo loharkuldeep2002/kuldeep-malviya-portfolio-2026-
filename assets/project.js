@@ -117,6 +117,21 @@
     container.append(el('section', { class: 'reviews', id: 'feedback' }, summary, form));
   }
 
+  function renderImageComments(container, data) {
+    const project = data.project;
+    const comments = data.comments || [];
+    const cards = comments.length ? el('div', { class: 'review-list' }, ...comments.map((comment) => {
+      const card = el('article', { class: 'review-card image-comment-card' });
+      card.append(img(comment.mediaUrl, '', 'image-comment-preview'),
+        el('header', {}, el('span', { class: 'review-name', text: comment.displayName }), el('span', { class: 'review-date', text: project.title })),
+        el('p', { class: 'review-text', text: comment.text }));
+      if (comment.reply) card.append(el('p', { class: 'image-comment-reply' }, el('strong', { text: 'Kuldeep replied: ' }), comment.reply));
+      return card;
+    })) : el('p', { class: 'reviews-empty', text: 'No approved image comments for this project yet.' });
+    container.append(section('Comments on the artwork', cards),
+      el('a', { class: 'btn btn-primary', href: `/reviews?project=${encodeURIComponent(project.slug)}#imageCommentsTitle` }, 'Comment on a project image', el('span', { class: 'arr', 'aria-hidden': 'true', text: '↗' })));
+  }
+
   function buildReviewForm(project) {
     const status = el('div', { class: 'form-status', role: 'status', 'aria-live': 'polite', hidden: 'hidden' });
     const ratingFieldset = el('fieldset', { class: 'rating-input' }, el('legend', { text: 'Your rating' }));
@@ -305,6 +320,7 @@
     const reviewHost = el('div');
     root.append(reviewHost);
     renderReviews(reviewHost, data);
+    renderImageComments(reviewHost, data);
   }
 
   function renderMissing(message) {
