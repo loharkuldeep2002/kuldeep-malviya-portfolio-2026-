@@ -89,6 +89,24 @@ Firestore rules deny browser reads and writes. The trusted Node server uses Fire
 
 The media library uses server-issued, five-minute Vercel Blob upload URLs. Connect a Vercel Blob store to the project; Vercel injects `BLOB_READ_WRITE_TOKEN` into selected environments. Production uses that token only when `VERCEL_ENV=production`. Preview requires a separate store token named `BLOB_PREVIEW_READ_WRITE_TOKEN`; never point Preview at the production store. Local uploads remain disabled unless `BLOB_LOCAL_DEVELOPMENT=true` is explicitly set. Uploads accept JPEG/PNG/WebP/GIF up to 20 MB and MP4/WebM/MOV up to 100 MB, and the application stops accepting new uploads near 900 MB to leave headroom under the free allowance. The store is public because portfolio images and videos must render on public pages; anyone with a media URL can view that file. Firebase Storage is not used by this upload flow, so no bucket setup or CORS configuration is needed. Firebase database setup does not deploy the Node website; the host must run this Node server and provide the Firestore identity securely. The current `firebase.json` configures Firestore and Storage rules, not Hosting. Firebase Storage currently requires the Blaze billing plan, so do not enable it under the strict $0 requirement. Vercel Hobby is eligible only for personal, non-commercial projects. Check the service's actual use against Vercel's terms and current Blob limits before operating the public site; this setup does not guarantee unlimited free usage.
 
+## Dedicated Preview / staging Firebase project
+
+Never point Preview at the production Firestore project. Create a separate Firebase project on Spark, create only its `(default)` Firestore Standard database in `asia-south1` using Production mode, and grant your Google account the `Cloud Datastore User` role on that staging project. Do not create a Cloud Storage bucket or attach billing for this media flow. Sign in locally with `gcloud auth application-default login` and check `.env` has `DATA_STORE=json` and `FIREBASE_PROJECT_ID=<your-staging-project-id>` before migrating.
+
+The migration script accepts a non-production target only when both `--staging` and an explicit `--project <staging-project-id>` are provided. First run a dry run and inspect the target ID and record counts:
+
+```powershell
+node scripts/migrate-firestore.js --dry-run --staging --project km-portfolio-stg-2026
+```
+
+Only after confirming this is the empty staging database, import and verify the local `data/db.json` content:
+
+```powershell
+node scripts/migrate-firestore.js --apply --staging --project km-portfolio-stg-2026
+```
+
+The importer keeps the local JSON file, creates a local backup, reads data back for verification, and excludes admins, MFA secrets, sessions, login attempts, reviews, and activity. It never writes to the production project in staging mode. Do not use `--apply` if the dry-run target or contents are unexpected.
+
 ## Optional aggregate analytics
 
 Analytics are disabled by default. To enable collection, set `ANALYTICS_ENABLED=true` in the hosting platform's private environment and redeploy only after reviewing the data policy and expected Firestore writes. The dashboard reports aggregate page views, project views, CTA clicks, and validated contact-form intent; it does not count unique visitors or save form fields, email addresses, or raw IP addresses. The server applies a best-effort per-process event limit and retains daily aggregates for 90 days. Because event counts are saved to the configured datastore, each accepted event causes a datastore write; keep this disabled unless that write volume is acceptable.
