@@ -1345,7 +1345,10 @@
     const fileInput = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime', multiple: true, class: 'a-input' });
     const altInput = input('alt', '', { placeholder: 'Describe the image' });
     const collectionInput = input('collection', '', { placeholder: 'Collection / album name' });
-    const message = h('p', { class: 'auth-note', text: 'Images up to 20 MB and videos up to 100 MB. Firebase Storage is used when configured.' });
+    const storageReady = state.data.mediaStorageConfigured === true;
+    const readyMessage = 'Firebase Storage settings detected. Images up to 20 MB and videos up to 100 MB. Upload also requires bucket permissions and CORS to allow this site.';
+    const setupMessage = 'Uploads are not configured on this server. Set FIREBASE_STORAGE_BUCKET, enable the Firebase Storage bucket, grant server access, and allow this site in bucket CORS. Local disk uploads are disabled on Vercel.';
+    const message = h('p', { class: 'auth-note', role: 'status', 'aria-live': 'polite', text: storageReady ? readyMessage : setupMessage });
     const uploadBtn = h('button', { class: 'a-btn primary', type: 'button', text: 'Upload media' });
     let retryFiles = [];
 
@@ -1359,6 +1362,11 @@
       const files = retryFiles.length ? [...retryFiles] : Array.from(fileInput.files || []);
       if (!files.length) {
         toast('Choose one or more images or videos first.', true);
+        return;
+      }
+      const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime']);
+      if (files.some((file) => !allowedTypes.has(file.type.toLowerCase()))) {
+        toast('Choose JPEG, PNG, WebP, GIF, MP4, WebM or MOV files only.', true);
         return;
       }
       if (files.some((file) => file.size > (file.type.startsWith('video/') ? 100 : 20) * 1024 * 1024)) {

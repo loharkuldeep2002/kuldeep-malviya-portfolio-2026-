@@ -837,7 +837,8 @@ function adminSnapshot(found) {
       media: db.media.length
     },
     analytics: analyticsSummary(db.settings, projects),
-    analyticsEnabled: process.env.ANALYTICS_ENABLED === 'true'
+    analyticsEnabled: process.env.ANALYTICS_ENABLED === 'true',
+    mediaStorageConfigured: mediaStorage.isConfigured()
   };
 }
 

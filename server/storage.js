@@ -30,6 +30,11 @@ function getBucket() {
   return getStorage(app).bucket(bucketName);
 }
 
+function isConfigured() {
+  const bucketName = String(process.env.FIREBASE_STORAGE_BUCKET || '').trim();
+  return process.env.DATA_STORE === 'firestore' && Boolean(bucketName) && !/[\\/\s]/.test(bucketName);
+}
+
 function validateUpload({ mimeType, size }) {
   const mime = String(mimeType || '').toLowerCase();
   const byteLength = Number(size);
@@ -100,4 +105,4 @@ async function deleteObject(path) {
   await getBucket().file(path).delete({ ignoreNotFound: true });
 }
 
-module.exports = { createUpload, verifyUpload, deleteObject, validateUpload, IMAGE_TYPES, VIDEO_TYPES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES };
+module.exports = { createUpload, verifyUpload, deleteObject, validateUpload, isConfigured, IMAGE_TYPES, VIDEO_TYPES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES };
