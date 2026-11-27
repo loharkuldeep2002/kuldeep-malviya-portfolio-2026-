@@ -837,7 +837,8 @@ function adminSnapshot(found) {
       media: db.media.length
     },
     analytics: analyticsSummary(db.settings, projects),
-    analyticsEnabled: process.env.ANALYTICS_ENABLED === 'true'
+    analyticsEnabled: process.env.ANALYTICS_ENABLED === 'true',
+    mediaStorageConfigured: mediaStorage.isConfigured()
   };
 }
 
@@ -1401,7 +1402,6 @@ async function handleAdminApi(req, res, url) {
       id: upload.id,
       path: upload.path,
       uploadUrl: upload.uploadUrl,
-      downloadToken: upload.downloadToken,
       mime: upload.mime,
       size: upload.size,
       kind: upload.kind,
@@ -1414,7 +1414,6 @@ async function handleAdminApi(req, res, url) {
       adminId: found.admin.id,
       id: str(body.id, 64),
       path: str(body.path, 240),
-      downloadToken: str(body.downloadToken, 64),
       mime: str(body.mime, 120),
       size: body.size
     });

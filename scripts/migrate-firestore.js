@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 require('../server/config').loadEnvFile();
 const { connect, serialize } = require('../server/firestore-store');
+const { resolveProject } = require('./migration-target');
 const root = path.resolve(__dirname, '..');
 const source = path.join(root, 'data', 'db.json');
 const args = process.argv.slice(2);
@@ -13,8 +14,11 @@ const value = name => args[args.indexOf(name) + 1];
 async function main() {
   const modes = ['--dry-run', '--check', '--apply'].filter(flag);
   if (modes.length !== 1) throw new Error('Choose exactly one mode: --dry-run, --check or --apply.');
-  const project = flag('--project') ? value('--project') : process.env.FIREBASE_PROJECT_ID;
-  if (!project || project !== 'kuldeep-malviya-portfolio') throw new Error('Expected --project kuldeep-malviya-portfolio (or set FIREBASE_PROJECT_ID).');
+  const project = resolveProject({
+    explicitProject: flag('--project') ? value('--project') : undefined,
+    environmentProject: process.env.FIREBASE_PROJECT_ID,
+    staging: flag('--staging')
+  });
   process.env.FIREBASE_PROJECT_ID = project;
   if (flag('--check')) {
     const store = connect();

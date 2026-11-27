@@ -1,8 +1,8 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // The website uses short-lived server-issued signed upload URLs. Browser
-    // clients must not read or write bucket objects through Firebase Rules.
+    // The website's media library uses Vercel Blob. Keep Firebase Storage
+    // access denied for all browser clients unless the storage design changes.
     match /{allPaths=**} {
       allow read, write: if false;
     }

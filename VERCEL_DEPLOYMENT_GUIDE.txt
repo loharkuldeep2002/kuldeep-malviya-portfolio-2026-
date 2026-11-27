@@ -19,15 +19,14 @@ The included `.gitignore` excludes these paths. Review the staged file list befo
 
 VERCEL ENVIRONMENT VARIABLES
 Set these in the Vercel project settings, not in Git:
-- `DATA_STORE` = `firestore`
-- `FIREBASE_PROJECT_ID` = `kuldeep-malviya-portfolio`
-- `FIREBASE_SERVICE_ACCOUNT_JSON` = the service-account JSON value, stored only as a protected secret in Vercel (never share it in chat or commit it)
-- `SITE_URL` = the assigned Preview/Production site URL as appropriate
-- `COOKIE_SECURE` = `1` for HTTPS
+- Production uses `DATA_STORE=firestore` and `FIREBASE_PROJECT_ID=kuldeep-malviya-portfolio`.
+- Preview must use a dedicated staging Firebase project ID and its own `FIREBASE_SERVICE_ACCOUNT_JSON`; never copy Production credentials to Preview.
+- Add `SITE_URL` to match the assigned Preview/Production origin and `COOKIE_SECURE=1` for HTTPS.
+- For initial staging admin setup only, set a strong random `ADMIN_BOOTSTRAP_TOKEN` in Preview; remove it after creating the staging admin and configuring MFA.
 Vercel supplies `PORT`; do not copy the local `.env` values for HOST/PORT. Keep `ADMIN_BOOTSTRAP_TOKEN` unset unless a fresh admin bootstrap/reset is specifically required. The existing database currently reports an admin configured.
 
 PRODUCTION BLOCKER: UPLOADED MEDIA
-The current CMS upload endpoint writes new files to local `uploads/`. Vercel Functions have a read-only filesystem except temporary `/tmp` scratch space, so files written there will not be durable across invocations. Before using Admin media uploads on a live deployment, move upload storage to Firebase Storage or another durable object store and adapt the CMS/API integration. Existing images in `assets/` are packaged as code assets; user uploads are not.
+CMS media uses short-lived signed uploads to Vercel Blob; it does not write persistent files to the Vercel Function filesystem. Connect one public Blob store to Production and a separate store to Preview. The app recognizes `BLOB_READ_WRITE_TOKEN` only in Production and requires `BLOB_PREVIEW_READ_WRITE_TOKEN` in Preview. Public media URLs can be viewed by anyone who has the link. Upload limits are 20 MB per image, 100 MB per video, with a 900 MB application safety cap; verify plan usage and the current no-cost allowance before launch. Existing images in `assets/` remain packaged as code assets.
 
 FIREBASE ACCESS
 - Firestore rules and indexes are included in `firebase/` and `firebase.json`.

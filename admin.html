@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/style.css" />
-  <link rel="stylesheet" href="/assets/admin.css?v=separate-pages-20261124" />
+  <link rel="stylesheet" href="/assets/admin.css?v=admin-cms-v2-20261127" />
 </head>
 <body class="admin-body" data-admin-page="dashboard">
   <a class="skip-link" href="#adminMain">Skip to dashboard</a>
@@ -25,12 +25,13 @@
 
   <!-- Dashboard -->
   <div id="dashView" class="dash" hidden>
-    <aside class="dash-side" aria-label="Dashboard sections">
+    <aside class="dash-side" id="dashSidebar" aria-label="Dashboard sections">
       <div class="dash-brand">
         <a href="/" class="brand">
           <span class="brand-mark" aria-hidden="true">KM</span>
           <span class="brand-name">Admin <span>CMS</span></span>
         </a>
+        <button class="dash-icon-btn dash-collapse-btn" id="sidebarToggle" type="button" aria-label="Collapse navigation" aria-pressed="false" title="Collapse navigation"><span aria-hidden="true">‹</span></button>
       </div>
       <nav class="dash-nav" id="dashNav" aria-label="Dashboard"></nav>
       <div class="dash-side-foot">
@@ -40,14 +41,16 @@
       </div>
     </aside>
 
-    <main class="dash-main" id="adminMain">
+    <main class="dash-main" id="adminMain" tabindex="-1">
       <header class="dash-top">
-        <div>
+        <button class="dash-icon-btn dash-mobile-toggle" id="mobileNavToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="dashSidebar"><span aria-hidden="true">☰</span></button>
+        <div class="dash-heading">
           <p class="mono" id="dashKicker">Dashboard</p>
           <h1 id="dashTitle">Overview</h1>
         </div>
         <div class="dash-top-actions">
-          <a class="btn btn-ghost admin-small-btn" href="/#work" target="_blank" rel="noopener">Public site ↗</a>
+          <span class="dash-session-pill"><i aria-hidden="true"></i> Secure session</span>
+          <a class="btn btn-ghost admin-small-btn" href="/#work" target="_blank" rel="noopener">View site <span aria-hidden="true">↗</span></a>
         </div>
       </header>
       <div id="dashContent" class="dash-content"></div>
@@ -58,6 +61,7 @@
 
   <script src="/assets/vendor/qrcode-generator.js" defer></script>
   <script src="/assets/authenticator-qr.js" defer></script>
-  <script src="/assets/admin.js?v=separate-pages-20261124" defer></script>
+  <script src="/assets/admin.js?v=admin-cms-v2-20261127" defer></script>
 </body>
 </html>
+
