@@ -222,6 +222,14 @@ function initializeOnce() {
   return initialization;
 }
 
+function canServePublicStaticFallback(req) {
+  if (!['GET', 'HEAD'].includes(req.method)) return false;
+  let pathname;
+  try { pathname = new URL(req.url, 'http://localhost').pathname || '/'; }
+  catch { return false; }
+  return !pathname.startsWith('/api/') && !pathname.startsWith('/admin') && !['/robots.txt', '/sitemap.xml'].includes(pathname);
+}
+
 async function handleIncoming(req, res) {
   const pathname = new URL(req.url, 'http://localhost').pathname || '/';
   const stateful = pathname.startsWith('/api/') || pathname.startsWith('/admin') || ['/robots.txt', '/sitemap.xml'].includes(pathname);
@@ -243,6 +251,10 @@ async function vercelHandler(req, res) {
     return handleIncoming(req, res);
   } catch (error) {
     console.error('Website startup failed: ' + error.message);
+    // Keep existing static portfolio pages available if a preview or a
+    // datastore outage prevents CMS initialization. Stateful APIs, admin,
+    // robots and sitemap still fail closed instead of using ephemeral data.
+    if (canServePublicStaticFallback(req)) return handleIncoming(req, res);
     if (!res.headersSent) {
       send(res, error.status || 503, JSON.stringify({ error: 'Website is temporarily unavailable.' }), {
         'Content-Type': 'application/json; charset=utf-8',
@@ -253,6 +265,7 @@ async function vercelHandler(req, res) {
 }
 
 module.exports = vercelHandler;
+module.exports.canServePublicStaticFallback = canServePublicStaticFallback;
 
 // Initialise (creates data/db.json with seeded content on first run)
 async function start() {
