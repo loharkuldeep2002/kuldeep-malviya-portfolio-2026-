@@ -14,6 +14,7 @@ const UPLOAD_DIR = path.join(ROOT, 'uploads');
 const MAX_JSON = 1024 * 1024; // 1 MB for regular JSON
 const MAX_UPLOAD_JSON = 8 * 1024 * 1024; // base64 payload for images
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const analyticsThrottle = new Map();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -236,6 +237,161 @@ function ipHash(req) {
 
 function audit(actor, action, entity, entityId, meta) {
   dbModule.logActivity(actor, action, entity, entityId, meta);
+}
+
+function cloneValue(value) {
+  return value == null ? null : JSON.parse(JSON.stringify(value));
+}
+
+function recordRevision(actor, type, entityId, label, before, after) {
+  const db = dbModule.load();
+  db.settings.revisions = db.settings.revisions || [];
+  const revision = {
+    id: dbModule.uid('rev_'), type, entityId: String(entityId || ''), label: str(label, 180),
+    before: cloneValue(before), after: cloneValue(after), createdAt: new Date().toISOString(), actor: str(actor, 120)
+  };
+  if (Buffer.byteLength(JSON.stringify(revision)) <= 400 * 1024) db.settings.revisions.unshift(revision);
+  while (db.settings.revisions.length > 40 || Buffer.byteLength(JSON.stringify(db.settings)) > 700 * 1024) db.settings.revisions.pop();
+}
+
+function createContentBackup(db) {
+  return {
+    format: 'km-portfolio-content-backup', version: 1, exportedAt: new Date().toISOString(),
+    projects: cloneValue(db.projects), services: cloneValue(db.services),
+    reviews: db.reviews.map(({ ipHash, userAgent, ...review }) => review),
+    comments: db.comments.map(({ ipHash, userAgent, ...comment }) => comment),
+    media: cloneValue(db.media), content: cloneValue(db.content), nav: cloneValue(db.nav), seo: cloneValue(db.seo)
+  };
+}
+
+function safeBackupId(value, type) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(value)) throw new HttpError(422, `Backup contains an invalid ${type} ID.`);
+  return value;
+}
+
+function sanitizeBackup(backup) {
+  if (!backup || backup.format !== 'km-portfolio-content-backup' || backup.version !== 1) throw new HttpError(422, 'This backup format is not supported.');
+  for (const [key, maximum] of [['projects', 500], ['services', 200], ['reviews', 10000], ['comments', 10000], ['media', 1000]]) {
+    if (!Array.isArray(backup[key]) || backup[key].length > maximum) throw new HttpError(422, `Backup ${key} list is missing or too large.`);
+  }
+  const db = dbModule.load();
+  const old = { projects: db.projects, services: db.services, media: db.media, content: db.content, nav: db.nav, seo: db.seo };
+  try {
+    const seenIds = new Set();
+    const assertUnique = (records, kind) => records.forEach((record) => {
+      const id = safeBackupId(record && record.id, kind);
+      const key = `${kind}:${id}`;
+      if (seenIds.has(key)) throw new HttpError(422, `Backup contains duplicate ${kind} IDs.`);
+      seenIds.add(key);
+    });
+    assertUnique(backup.projects, 'project'); assertUnique(backup.services, 'service'); assertUnique(backup.media, 'media');
+    assertUnique(backup.reviews, 'review'); assertUnique(backup.comments, 'comment');
+    const media = backup.media.map((item) => {
+      const url = safeUrl(item.url, { allowMail: false });
+      if (!url) throw new HttpError(422, 'Backup contains an invalid media URL.');
+      const kind = item.kind === 'video' || String(item.mime || '').startsWith('video/') ? 'video' : 'image';
+      const sourcePlayback = item.playback && typeof item.playback === 'object' ? item.playback : {};
+      const playback = kind === 'video' ? {
+        autoplay: sourcePlayback.autoplay === true,
+        loop: sourcePlayback.loop === true,
+        muted: sourcePlayback.muted !== false,
+        controls: sourcePlayback.controls !== false,
+        playbackRate: [0.5, 0.75, 1, 1.25, 1.5, 2].includes(Number(sourcePlayback.playbackRate)) ? Number(sourcePlayback.playbackRate) : 1
+      } : null;
+      return { id: item.id, filename: str(item.filename, 180), url, storagePath: str(item.storagePath, 240), mime: str(item.mime, 120), kind, size: Math.max(0, Math.round(Number(item.size) || 0)), alt: str(item.alt, 200), collection: str(item.collection, 48), playback, createdAt: str(item.createdAt, 40), updatedAt: str(item.updatedAt, 40) };
+    });
+    db.media = media; db.projects = []; db.services = [];
+    const projectSlugs = new Set();
+    const projects = backup.projects.map((project) => {
+      const slug = slugify(project.slug);
+      if (!slug || projectSlugs.has(slug)) throw new HttpError(422, 'Backup contains duplicate or invalid project slugs.');
+      projectSlugs.add(slug);
+      const normalized = normalizeProject(project, null);
+      return { id: project.id, ...normalized, createdAt: str(project.createdAt, 40) || new Date().toISOString(), updatedAt: str(project.updatedAt, 40) || new Date().toISOString() };
+    });
+    db.projects = projects;
+    const serviceSlugs = new Set();
+    const services = backup.services.map((service) => {
+      const slug = slugify(service.slug);
+      if (!slug || serviceSlugs.has(slug)) throw new HttpError(422, 'Backup contains duplicate or invalid service slugs.');
+      serviceSlugs.add(slug);
+      const normalized = normalizeService(service, null);
+      return { id: service.id, ...normalized, createdAt: str(service.createdAt, 40) || new Date().toISOString(), updatedAt: str(service.updatedAt, 40) || new Date().toISOString() };
+    });
+    const projectBySlug = new Map(projects.map((project) => [project.slug, project]));
+    const reviews = backup.reviews.map((review) => {
+      const project = projectBySlug.get(slugify(review.projectSlug));
+      if (!project) throw new HttpError(422, 'Backup review refers to a missing project.');
+      const rating = Math.round(Number(review.rating));
+      if (rating < 1 || rating > 5 || !['pending', 'approved', 'rejected', 'hidden'].includes(review.status)) throw new HttpError(422, 'Backup contains an invalid review status or rating.');
+      return { id: safeBackupId(review.id, 'review'), projectSlug: project.slug, projectTitle: project.title, displayName: str(review.displayName, 40), rating, text: str(review.text, 1200), consent: review.consent === true, status: review.status, createdAt: str(review.createdAt, 40), updatedAt: str(review.updatedAt, 40), approvedAt: str(review.approvedAt, 40) || null, moderatedAt: str(review.moderatedAt, 40) || null, moderatedBy: str(review.moderatedBy, 120) };
+    });
+    const comments = backup.comments.map((comment) => {
+      const project = projectBySlug.get(slugify(comment.projectSlug));
+      const mediaUrl = safeUrl(comment.mediaUrl, { allowMail: false });
+      if (!project || ![project.cover, ...(project.gallery || []).map((image) => image.url)].includes(mediaUrl)) throw new HttpError(422, 'Backup comment refers to a missing project image.');
+      if (!['pending', 'approved', 'rejected', 'hidden'].includes(comment.status)) throw new HttpError(422, 'Backup contains an invalid comment status.');
+      return { id: safeBackupId(comment.id, 'comment'), projectSlug: project.slug, projectTitle: project.title, mediaUrl, displayName: str(comment.displayName, 40), text: str(comment.text, 1000), reply: str(comment.reply, 1000), consent: comment.consent === true, status: comment.status, createdAt: str(comment.createdAt, 40), updatedAt: str(comment.updatedAt, 40), approvedAt: str(comment.approvedAt, 40) || null, moderatedAt: str(comment.moderatedAt, 40) || null, moderatedBy: str(comment.moderatedBy, 120) };
+    });
+    db.projects = projects; db.services = services; db.media = media;
+    const content = normalizeContent(backup.content || {});
+    db.nav = backup.nav && typeof backup.nav === 'object' ? normalizeNav(backup.nav) : db.nav;
+    db.seo = backup.seo && typeof backup.seo === 'object' ? normalizeSeo(backup.seo) : db.seo;
+    return { projects, services, reviews, comments, media, content, nav: db.nav, seo: db.seo };
+  } finally {
+    Object.assign(db, old);
+  }
+}
+
+async function trackPublicEvent(req, body) {
+  if (process.env.ANALYTICS_ENABLED !== 'true') return { ok: true, enabled: false };
+  const event = ['page_view', 'project_view', 'contact_intent', 'cta_click'].includes(body.event) ? body.event : null;
+  if (!event) throw new HttpError(422, 'Unknown analytics event.');
+  const route = String(body.path || '/').split('?')[0].slice(0, 180);
+  if (!/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)?)?$/.test(route)) throw new HttpError(422, 'Invalid analytics path.');
+  const db = dbModule.load();
+  const now = Date.now();
+  const rateKey = crypto.createHash('sha256').update(String(db.settings.ipSalt || '') + auth.clientIp(req)).digest('hex');
+  const previous = analyticsThrottle.get(rateKey);
+  if (previous && now - previous.startedAt < 60 * 60 * 1000 && previous.count >= 120) return { ok: true, limited: true };
+  if (!previous || now - previous.startedAt >= 60 * 60 * 1000) analyticsThrottle.set(rateKey, { startedAt: now, count: 1 });
+  else previous.count += 1;
+  if (analyticsThrottle.size > 5000) {
+    for (const [key, value] of analyticsThrottle) if (now - value.startedAt >= 60 * 60 * 1000) analyticsThrottle.delete(key);
+  }
+  db.settings.analytics = db.settings.analytics || {};
+  const day = new Date().toISOString().slice(0, 10);
+  const row = db.settings.analytics[day] || { pageViews: 0, projectViews: 0, contactIntents: 0, ctaClicks: 0, paths: {}, projects: {} };
+  if (event === 'page_view' || event === 'project_view') row.pageViews += 1;
+  if (event === 'project_view') {
+    row.projectViews += 1;
+    const slug = route.match(/^\/project\/([a-z0-9-]+)$/)?.[1];
+    if (slug) row.projects[slug] = (row.projects[slug] || 0) + 1;
+  }
+  if (event === 'contact_intent') row.contactIntents += 1;
+  if (event === 'cta_click') row.ctaClicks += 1;
+  row.paths[route] = (row.paths[route] || 0) + 1;
+  db.settings.analytics[day] = row;
+  const cutoff = new Date(now - 89 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  Object.keys(db.settings.analytics).forEach((date) => { if (date < cutoff) delete db.settings.analytics[date]; });
+  await dbModule.save();
+  return { ok: true, enabled: true };
+}
+
+function analyticsSummary(settings, projects) {
+  const cutoff = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rows = Object.entries(settings.analytics || {}).filter(([day]) => day >= cutoff);
+  const summary = { pageViews: 0, projectViews: 0, contactIntents: 0, ctaClicks: 0, topProjects: [] };
+  const totals = {};
+  rows.forEach(([, row]) => {
+    summary.pageViews += Number(row.pageViews) || 0;
+    summary.projectViews += Number(row.projectViews) || 0;
+    summary.contactIntents += Number(row.contactIntents) || 0;
+    summary.ctaClicks += Number(row.ctaClicks) || 0;
+    Object.entries(row.projects || {}).forEach(([slug, count]) => { totals[slug] = (totals[slug] || 0) + (Number(count) || 0); });
+  });
+  summary.topProjects = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([slug, views]) => ({ slug, title: projects.find((project) => project.slug === slug)?.title || slug, views }));
+  return summary;
 }
 
 /* --------------------------- normalisers --------------------------------- */
@@ -653,11 +809,12 @@ function adminSnapshot(found) {
       createdAt: comment.createdAt,
       moderatedAt: comment.moderatedAt
     })),
-    media: db.media,
+    media: db.media.map((item) => ({ ...item, references: mediaReferences(item.url) })),
     content: db.content,
     nav: db.nav,
     seo: db.seo,
     activity: db.activity.slice(0, 100),
+    revisions: (db.settings.revisions || []).slice(0, 40),
     sessions: db.sessions
       .filter((s) => s.adminId === found.admin.id)
       .map((s) => ({
@@ -678,7 +835,9 @@ function adminSnapshot(found) {
       pendingComments: db.comments.filter((comment) => comment.status === 'pending').length,
       approvedReviews: db.reviews.filter((r) => r.status === 'approved').length,
       media: db.media.length
-    }
+    },
+    analytics: analyticsSummary(db.settings, projects),
+    analyticsEnabled: process.env.ANALYTICS_ENABLED === 'true'
   };
 }
 
@@ -688,7 +847,9 @@ function upsertProject(req, body, id) {
   if (id && !existing) throw new HttpError(404, 'Project not found.');
   const data = normalizeProject(body, existing);
   if (existing) {
+    const before = cloneValue(existing);
     Object.assign(existing, data, { updatedAt: new Date().toISOString() });
+    recordRevision(req.adminEmail, 'project', existing.id, existing.title, before, existing);
     audit(req.adminEmail, 'project.updated', 'project', existing.id, existing.slug);
     return existing;
   }
@@ -699,6 +860,7 @@ function upsertProject(req, body, id) {
     updatedAt: new Date().toISOString()
   };
   db.projects.push(created);
+  recordRevision(req.adminEmail, 'project', created.id, created.title, null, created);
   audit(req.adminEmail, 'project.created', 'project', created.id, created.slug);
   return created;
 }
@@ -709,7 +871,9 @@ function upsertService(req, body, id) {
   if (id && !existing) throw new HttpError(404, 'Service not found.');
   const data = normalizeService(body, existing);
   if (existing) {
+    const before = cloneValue(existing);
     Object.assign(existing, data, { updatedAt: new Date().toISOString() });
+    recordRevision(req.adminEmail, 'service', existing.id, existing.name, before, existing);
     audit(req.adminEmail, 'service.updated', 'service', existing.id, existing.slug);
     return existing;
   }
@@ -720,6 +884,7 @@ function upsertService(req, body, id) {
     updatedAt: new Date().toISOString()
   };
   db.services.push(created);
+  recordRevision(req.adminEmail, 'service', created.id, created.name, null, created);
   audit(req.adminEmail, 'service.created', 'service', created.id, created.slug);
   return created;
 }
@@ -960,6 +1125,63 @@ async function handleAdminApi(req, res, url) {
     return sendJson(res, 200, adminSnapshot(found));
   }
 
+  if (p === '/api/admin/backup' && req.method === 'GET') {
+    const backup = createContentBackup(dbModule.load());
+    const body = JSON.stringify(backup, null, 2);
+    const filename = `km-portfolio-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body), 'Content-Disposition': `attachment; filename="${filename}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.end(body);
+    return;
+  }
+
+  if (p === '/api/admin/backup/restore' && req.method === 'POST') {
+    const body = await readJson(req, MAX_UPLOAD_JSON);
+    if (!auth.verifyPassword(String(body.currentPassword || ''), found.admin.passwordHash)) throw new HttpError(401, 'Current password is incorrect.');
+    if (body.confirmation !== 'RESTORE') throw new HttpError(422, 'Type RESTORE to confirm this replacement.');
+    const clean = sanitizeBackup(body.backup);
+    const db = dbModule.load();
+    const previous = { projects: db.projects, services: db.services, reviews: db.reviews, comments: db.comments, media: db.media, content: db.content, nav: db.nav, seo: db.seo, activity: db.activity };
+    Object.assign(db, clean);
+    audit(found.admin.email, 'backup.restored', 'site', 'site', `${clean.projects.length} projects, ${clean.services.length} services`);
+    try {
+      await dbModule.save();
+    } catch (error) {
+      Object.assign(db, previous);
+      throw error;
+    }
+    return sendJson(res, 200, { ok: true, counts: { projects: clean.projects.length, services: clean.services.length, reviews: clean.reviews.length, comments: clean.comments.length, media: clean.media.length } });
+  }
+
+  const revisionRestoreMatch = /^\/api\/admin\/revisions\/([^/]+)\/restore$/.exec(p);
+  if (revisionRestoreMatch && req.method === 'POST') {
+    const body = await readJson(req);
+    if (!auth.verifyPassword(String(body.currentPassword || ''), found.admin.passwordHash)) throw new HttpError(401, 'Current password is incorrect.');
+    if (body.confirmation !== 'RESTORE') throw new HttpError(422, 'Type RESTORE to confirm this revision.');
+    const db = dbModule.load();
+    const revision = (db.settings.revisions || []).find((item) => item.id === revisionRestoreMatch[1]);
+    if (!revision || !revision.before) throw new HttpError(404, 'This revision has no earlier version to restore.');
+    if (revision.type === 'project') {
+      const current = db.projects.find((item) => item.id === revision.entityId);
+      if (!current) throw new HttpError(404, 'The project no longer exists.');
+      upsertProject(req, revision.before, current.id);
+    } else if (revision.type === 'service') {
+      const current = db.services.find((item) => item.id === revision.entityId);
+      if (!current) throw new HttpError(404, 'The service no longer exists.');
+      upsertService(req, revision.before, current.id);
+    } else if (revision.type === 'site') {
+      const before = { content: cloneValue(db.content), nav: cloneValue(db.nav), seo: cloneValue(db.seo) };
+      db.content = cloneValue(revision.before.content);
+      db.nav = cloneValue(revision.before.nav);
+      db.seo = cloneValue(revision.before.seo);
+      recordRevision(found.admin.email, 'site', 'site', 'Restored website settings', before, { content: db.content, nav: db.nav, seo: db.seo });
+    } else {
+      throw new HttpError(422, 'This revision type cannot be restored.');
+    }
+    audit(found.admin.email, 'revision.restored', revision.type, revision.entityId, revision.label);
+    await dbModule.save();
+    return sendJson(res, 200, { ok: true });
+  }
+
   if (p === '/api/admin/logout' && req.method === 'POST') {
     auth.revokeSession(found.session.id);
     audit(found.admin.email, 'admin.logout', 'admin', found.admin.id);
@@ -1136,9 +1358,11 @@ async function handleAdminApi(req, res, url) {
   if (p === '/api/admin/content' && req.method === 'PUT') {
     const db = dbModule.load();
     const body = await readJson(req);
+    const before = { content: cloneValue(db.content), nav: cloneValue(db.nav), seo: cloneValue(db.seo) };
     db.content = normalizeContent(body.content || body);
     if (body.nav) db.nav = normalizeNav(body.nav);
     if (body.seo) db.seo = normalizeSeo(body.seo);
+    recordRevision(found.admin.email, 'site', 'site', 'Website content, navigation, and SEO', before, { content: db.content, nav: db.nav, seo: db.seo });
     audit(found.admin.email, 'content.updated', 'site', 'site');
     await dbModule.save();
     return sendJson(res, 200, { content: db.content, nav: db.nav, seo: db.seo });
@@ -1157,6 +1381,7 @@ async function handleAdminApi(req, res, url) {
       mime,
       size: buffer.length,
       alt: str(body.alt, 200),
+      collection: str(body.collection, 48),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1203,6 +1428,7 @@ async function handleAdminApi(req, res, url) {
       size: verified.size,
       playback: verified.kind === 'video' ? { autoplay: false, loop: false, muted: true, controls: true, playbackRate: 1 } : null,
       alt: str(body.alt, 200),
+      collection: str(body.collection, 48),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1220,6 +1446,7 @@ async function handleAdminApi(req, res, url) {
     if (req.method === 'PUT') {
       const body = await readJson(req, MAX_UPLOAD_JSON);
       if (body.alt !== undefined) item.alt = str(body.alt, 200);
+      if (body.collection !== undefined) item.collection = str(body.collection, 48);
       if (body.playback !== undefined) {
         if ((item.kind || '').toLowerCase() !== 'video') throw new HttpError(422, 'Playback settings are only available for videos.');
         const playback = body.playback && typeof body.playback === 'object' ? body.playback : {};
@@ -1248,6 +1475,7 @@ async function handleAdminApi(req, res, url) {
           mime: replacement.mime,
           kind: replacementKind,
           size: replacement.size,
+          collection: replacement.collection || item.collection || '',
           playback: replacement.playback || null,
           updatedAt: new Date().toISOString()
         });
@@ -1399,6 +1627,13 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { comments: approvedComments() });
     }
 
+    if (url.pathname === '/api/analytics/event' && req.method === 'POST') {
+      if (!auth.isSameOrigin(req)) throw new HttpError(403, 'Cross-origin requests are not allowed.');
+      const body = await readJson(req, 2048);
+      const result = await trackPublicEvent(req, body);
+      return sendJson(res, 202, result);
+    }
+
     if (url.pathname === '/api/reviews' && req.method === 'POST') {
       if (!auth.isSameOrigin(req)) throw new HttpError(403, 'Cross-origin requests are not allowed.');
       const body = await readJson(req, 32 * 1024);
@@ -1427,5 +1662,5 @@ async function handleApi(req, res, url) {
   }
 }
 
-module.exports = { handleApi, HttpError, UPLOAD_DIR, MAX_UPLOAD_JSON };
+module.exports = { handleApi, HttpError, UPLOAD_DIR, MAX_UPLOAD_JSON, analyticsSummary, sanitizeBackup };
 
