@@ -20,6 +20,9 @@
   const dashKicker = document.getElementById('dashKicker');
   const dashContent = document.getElementById('dashContent');
   const dashEmail = document.getElementById('dashEmail');
+  const dashSidebar = document.getElementById('dashSidebar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const mobileNavToggle = document.getElementById('mobileNavToggle');
   const toastEl = document.getElementById('toast');
   const logoutBtn = document.getElementById('logoutBtn');
 
@@ -34,7 +37,14 @@
     expandedRevisionId: null,
     mediaQuery: '',
     mediaFilter: 'all',
-    mediaCollection: 'all'
+    mediaCollection: 'all',
+    projectSearch: '',
+    projectStatus: 'all',
+    projectCategory: 'all',
+    projectSort: 'site-order',
+    projectPage: 1,
+    projectLayout: 'list',
+    projectDirty: false
   };
   let notificationPollStarted = false;
 
@@ -52,6 +62,13 @@
     { id: 'backups', label: 'Backups', kicker: 'Export' },
     { id: 'account', label: 'Account & security', kicker: 'Access' },
     { id: 'activity', label: 'Activity', kicker: 'History' }
+  ];
+
+  const NAV_GROUPS = [
+    { label: 'Workspace', ids: ['overview', 'projects', 'services'] },
+    { label: 'Engagement', ids: ['reviews', 'comments', 'media'] },
+    { label: 'Website', ids: ['content', 'navigation', 'seo'] },
+    { label: 'System', ids: ['revisions', 'backups', 'account', 'activity'] }
   ];
 
   try {
@@ -518,24 +535,42 @@
 
   function renderNav() {
     dashNav.textContent = '';
-    TABS.forEach((tab) => {
-      const btn = h('button', { type: 'button', 'aria-current': state.tab === tab.id ? 'true' : 'false' }, tab.label);
-      if (tab.id === 'reviews' && state.data && state.data.counts.pendingReviews) {
-        btn.append(h('span', { class: 'nav-count', text: String(state.data.counts.pendingReviews) }));
-      }
-      if (tab.id === 'comments' && state.data && state.data.counts.pendingComments) {
-        btn.append(h('span', { class: 'nav-count', text: String(state.data.counts.pendingComments) }));
-      }
-      btn.addEventListener('click', () => {
-        state.tab = tab.id;
-        state.projectId = null;
-        state.serviceId = null;
-        state.reviewEditId = null;
-        renderNav();
-        renderTab();
+    NAV_GROUPS.forEach((group) => {
+      const section = h('div', { class: 'dash-nav-group' }, h('p', { class: 'dash-nav-label', text: group.label }));
+      group.ids.forEach((id) => {
+        const tab = TABS.find((item) => item.id === id);
+        if (!tab) return;
+        const btn = h('button', { type: 'button', 'aria-current': state.tab === tab.id ? 'page' : 'false', title: tab.label },
+          h('span', { class: 'dash-nav-icon', 'aria-hidden': 'true', text: navIcon(tab.id) }),
+          h('span', { class: 'dash-nav-text', text: tab.label })
+        );
+        const badge = tab.id === 'reviews' ? state.data?.counts?.pendingReviews : tab.id === 'comments' ? state.data?.counts?.pendingComments : 0;
+        if (badge) btn.append(h('span', { class: 'nav-count', text: String(badge) }));
+        btn.addEventListener('click', () => {
+        if (!confirmProjectExit()) return;
+        state.projectDirty = false;
+          state.tab = tab.id;
+          state.projectId = null;
+          state.serviceId = null;
+          state.reviewEditId = null;
+          dashSidebar?.classList.remove('is-open');
+          dashView.classList.remove('mobile-nav-open');
+          mobileNavToggle?.setAttribute('aria-expanded', 'false');
+          renderNav();
+          renderTab();
+        });
+        section.append(btn);
       });
-      dashNav.append(btn);
+      dashNav.append(section);
     });
+  }
+
+  function navIcon(id) {
+    return ({ overview: '⌂', projects: '▦', services: '✳', reviews: '☆', comments: '◌', media: '▧', content: '▤', navigation: '☷', seo: '⌕', revisions: '↺', backups: '⇧', account: '◎', activity: '⌁' })[id] || '·';
+  }
+
+  function confirmProjectExit() {
+    return !state.projectDirty || confirmAction('You have unsaved project changes. Discard them and leave this editor?');
   }
 
   function renderTab() {
@@ -567,6 +602,17 @@
   function renderOverview() {
     const { counts, reviews, activity, analytics } = state.data;
     dashContent.append(
+      h('section', { class: 'overview-welcome' },
+        h('div', {},
+          h('p', { class: 'overview-eyebrow', text: 'PORTFOLIO CONTROL ROOM' }),
+          h('h2', { text: 'Your work, in focus.' }),
+          h('p', { text: 'Manage projects, keep the site current, and review what needs your attention.' })
+        ),
+        h('div', { class: 'overview-actions' },
+          h('button', { class: 'a-btn primary', type: 'button', text: 'Create a project', onclick: () => { state.tab = 'projects'; state.projectId = 'new'; renderNav(); renderTab(); } }),
+          h('button', { class: 'a-btn', type: 'button', text: 'Open media library', onclick: () => { state.tab = 'media'; renderNav(); renderTab(); } })
+        )
+      ),
       h('div', { class: 'a-grid cols-4' },
         metric(analytics.pageViews, 'Page views · 30 days'),
         metric(analytics.projectViews, 'Project views · 30 days'),
@@ -584,6 +630,7 @@
       metric(counts.publishedProjects, 'Published projects'),
       metric(counts.publishedServices, 'Published services'),
       metric(counts.pendingReviews, 'Pending reviews'),
+      metric(counts.pendingComments || 0, 'Pending image comments'),
       metric(counts.media, 'Media items')
     ));
 
@@ -645,19 +692,77 @@
     const projects = state.data.projects;
     const editing = state.projectId ? projects.find((p) => p.id === state.projectId) : null;
 
+    if (editing || state.projectId === 'new') {
+      dashContent.append(projectEditor(editing));
+      return;
+    }
+
+    const search = input('projectSearch', state.projectSearch, { type: 'search', placeholder: 'Search title, client or slug…', 'aria-label': 'Search projects' });
+    const status = select('projectStatus', state.projectStatus, [
+      { value: 'all', label: 'All statuses' }, { value: 'published', label: 'Published' }, { value: 'draft', label: 'Draft' }, { value: 'archived', label: 'Archived' }
+    ]);
+    const categories = [...new Set(projects.map((project) => project.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const category = select('projectCategory', state.projectCategory, [
+      { value: 'all', label: 'All categories' }, ...categories.map((value) => ({ value, label: value }))
+    ]);
+    const sort = select('projectSort', state.projectSort, [
+      { value: 'site-order', label: 'Site order' }, { value: 'updated', label: 'Recently updated' }, { value: 'title', label: 'Title A–Z' }, { value: 'year', label: 'Year: newest' }
+    ]);
+    const results = h('div', { class: 'a-list project-results', 'data-layout': state.projectLayout });
+    const count = h('span', { class: 'project-result-count', role: 'status', 'aria-live': 'polite' });
+    const pagination = h('div', { class: 'project-pagination' });
+    const updateResults = () => {
+      const query = state.projectSearch.trim().toLocaleLowerCase();
+      const filtered = projects.filter((project) => {
+        const matchesQuery = !query || [project.title, project.client, project.slug, project.category].some((value) => String(value || '').toLocaleLowerCase().includes(query));
+        const projectStatus = project.archived ? 'archived' : project.status;
+        return matchesQuery && (state.projectStatus === 'all' || projectStatus === state.projectStatus) && (state.projectCategory === 'all' || project.category === state.projectCategory);
+      });
+      filtered.sort((a, b) => {
+        if (state.projectSort === 'title') return String(a.title || '').localeCompare(String(b.title || ''));
+        if (state.projectSort === 'year') return Number(b.year || 0) - Number(a.year || 0) || Number(a.order || 0) - Number(b.order || 0);
+        if (state.projectSort === 'updated') return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+        return Number(a.order || 0) - Number(b.order || 0) || String(a.title || '').localeCompare(String(b.title || ''));
+      });
+      const pageSize = 12;
+      const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+      state.projectPage = Math.min(state.projectPage, pageCount);
+      const start = (state.projectPage - 1) * pageSize;
+      const pageProjects = filtered.slice(start, start + pageSize);
+      results.replaceChildren(...(pageProjects.length ? pageProjects.map((project) => projectRow(project)) : [h('p', { class: 'a-empty', text: projects.length ? 'No projects match those filters.' : 'No projects yet. Create your first case study to get started.' })]));
+      count.textContent = `${filtered.length ? start + 1 : 0}–${Math.min(start + pageSize, filtered.length)} of ${filtered.length} · ${projects.length} total`;
+      pagination.replaceChildren();
+      if (pageCount > 1) pagination.append(
+        h('button', { class: 'a-btn a-btn-sm', type: 'button', text: '← Previous', disabled: state.projectPage <= 1, onclick: () => { state.projectPage -= 1; updateResults(); } }),
+        h('span', { class: 'project-page-label', text: `Page ${state.projectPage} of ${pageCount}` }),
+        h('button', { class: 'a-btn a-btn-sm', type: 'button', text: 'Next →', disabled: state.projectPage >= pageCount, onclick: () => { state.projectPage += 1; updateResults(); } })
+      );
+    };
+    const resetProjectPage = () => { state.projectPage = 1; updateResults(); };
+    search.addEventListener('input', () => { state.projectSearch = search.value; resetProjectPage(); });
+    status.addEventListener('change', () => { state.projectStatus = status.value; resetProjectPage(); });
+    category.addEventListener('change', () => { state.projectCategory = category.value; resetProjectPage(); });
+    sort.addEventListener('change', () => { state.projectSort = sort.value; resetProjectPage(); });
+    const layoutToggle = h('button', { class: 'a-btn project-layout-toggle', type: 'button', text: state.projectLayout === 'list' ? 'Grid view' : 'List view', 'aria-pressed': state.projectLayout === 'grid' ? 'true' : 'false', onclick: () => {
+      state.projectLayout = state.projectLayout === 'list' ? 'grid' : 'list';
+      results.dataset.layout = state.projectLayout;
+      layoutToggle.textContent = state.projectLayout === 'list' ? 'Grid view' : 'List view';
+      layoutToggle.setAttribute('aria-pressed', state.projectLayout === 'grid' ? 'true' : 'false');
+    } });
+
     dashContent.append(
       h('section', { class: 'a-card' },
         h('div', { class: 'a-card-head' },
-          h('div', {}, h('h2', { text: 'Case studies' }), h('p', { text: 'Order controls the public grid. Archived projects stay in the database.' })),
+          h('div', {}, h('h2', { text: 'Projects' }), h('p', { text: 'Keep case studies organized. Draft and archive changes stay under your control.' })),
           h('button', { class: 'a-btn primary', type: 'button', text: '+ New project', onclick: () => { state.projectId = 'new'; renderTab(); } })
         ),
-        h('div', { class: 'a-list' }, ...projects.map((project) => projectRow(project)))
+        h('div', { class: 'project-toolbar' }, field('Search', search), field('Status', status), field('Category', category), field('Sort', sort), layoutToggle),
+        h('div', { class: 'project-list-heading' }, h('span', { text: 'All case studies' }), count),
+        results,
+        pagination
       )
     );
-
-    if (editing || state.projectId === 'new') {
-      dashContent.append(projectEditor(editing));
-    }
+    updateResults();
   }
 
   function projectRow(project) {
@@ -728,41 +833,60 @@
     const picker = mediaPicker(cover);
     const galleryPicker = galleryMediaPicker(gallery);
 
-    const form = h('form', { class: 'a-form editor-form' },
-      h('div', { class: 'a-card-head' }, h('h2', { text: isNew ? 'New project' : `Edit — ${project.title}` })),
-      h('details', { class: 'a-card editor-section', open: true }, h('summary', { text: 'Basics & publishing' }),
+    const editorPreview = h('div', { class: 'project-preview-summary' },
+      h('span', { class: 'project-preview-thumb' }, cover.value ? h('img', { src: cover.value, alt: '' }) : h('span', { 'aria-hidden': 'true', text: 'KM' })),
+      h('div', {}, h('strong', { text: title.value || 'Untitled project' }), h('p', { class: 'a-row-meta', text: `/${slug.value || 'project-slug'} · ${status.value}` }))
+    );
+    const saveHint = h('span', { class: 'editor-save-hint', text: 'Changes are saved only when you choose save.' });
+    const form = h('form', { class: 'a-form editor-form project-editor-form' },
+      h('div', { class: 'project-editor-head' },
+        h('div', {}, h('p', { class: 'overview-eyebrow', text: isNew ? 'NEW CASE STUDY' : 'PROJECT WORKSPACE' }), h('h2', { text: isNew ? 'Create project' : project.title }), h('p', { class: 'project-editor-subtitle', text: 'Move through the sections, then save when you are ready.' })),
+        h('button', { class: 'a-btn', type: 'button', text: '← All projects', onclick: () => { if (!confirmProjectExit()) return; state.projectDirty = false; state.projectId = null; renderTab(); } })
+      ),
+      h('nav', { class: 'project-editor-tabs', role: 'tablist', 'aria-label': 'Project editor sections' },
+        ...[['general', 'General'], ['story', 'Case study'], ['media', 'Media'], ['seo', 'SEO'], ['preview', 'Preview']].map(([id, label], index) =>
+          h('button', { class: 'project-editor-tab', type: 'button', role: 'tab', id: `project-tab-${id}`, 'aria-controls': `project-panel-${id}`, 'aria-selected': index === 0 ? 'true' : 'false', tabindex: index === 0 ? '0' : '-1', text: label, onclick: () => selectProjectEditorTab(form, id) })
+        )
+      ),
+      h('section', { class: 'a-card editor-section project-editor-panel', id: 'project-panel-general', role: 'tabpanel', 'aria-labelledby': 'project-tab-general', 'data-editor-panel': 'general' }, h('div', { class: 'editor-panel-heading' }, h('h3', { text: 'Project details' }), h('p', { text: 'Set the title, category, order and publishing state.' })),
         h('div', { class: 'row' }, field('Title', title, null, true), field('Slug', slug, 'Lowercase letters, numbers, hyphens.')),
         h('div', { class: 'row' }, field('Subtitle', subtitle), field('Client / display label', client)),
         h('div', { class: 'row' }, field('Category', category), field('Year', year), field('Order', order), field('Status', status)),
         field('Short description', shortDescription, 'Shown on the work grid.')
       ),
-      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Story & outcomes' }),
-        field('Challenge', challenge), field('Approach & process', approach), field('Outcome', outcome, 'Only add verified outcomes. Leave empty to hide the section.')
-      ),
-      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Deliverables & links' }),
+      h('section', { class: 'a-card editor-section project-editor-panel', id: 'project-panel-story', role: 'tabpanel', 'aria-labelledby': 'project-tab-story', 'data-editor-panel': 'story', hidden: true }, h('div', { class: 'editor-panel-heading' }, h('h3', { text: 'Case study' }), h('p', { text: 'Tell the story clearly and keep results verifiable.' })),
+        field('Challenge', challenge), field('Approach & process', approach), field('Outcome', outcome, 'Only add verified outcomes. Leave empty to hide the section.'),
         h('div', { class: 'row' }, field('Deliverables', deliverables, 'One per line.'), field('Tags', tags, 'One per line.')),
         field('Facts', facts, 'One per line as “Value | Label”. Shown in the project sidebar and featured card.'),
         field('Services', services, 'Comma-separated service slugs.')
       ),
-      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Images & gallery' }),
+      h('section', { class: 'a-card editor-section project-editor-panel', id: 'project-panel-media', role: 'tabpanel', 'aria-labelledby': 'project-tab-media', 'data-editor-panel': 'media', hidden: true }, h('div', { class: 'editor-panel-heading' }, h('h3', { text: 'Media and gallery' }), h('p', { text: 'Choose the cover image, write meaningful alt text, and arrange gallery entries.' })),
         h('div', { class: 'row' }, field('Cover image URL', cover), picker ? field('Media library', picker) : null),
         field('Cover alt text', coverAlt, 'Describe the image for screen readers.'),
         field('Gallery', gallery, 'One per line as “URL | alt text”.'),
-        galleryPicker ? field('Add from media library', galleryPicker, 'Images and videos keep their saved playback settings.') : null
+        galleryPicker ? field('Add from media library', galleryPicker, 'Images and videos keep their saved playback settings.') : null,
+        h('div', { class: 'editor-inline-note', text: 'Video playback options stay with each item in the Media library, so one asset behaves consistently everywhere it is used.' })
       ),
-      h('details', { class: 'a-card editor-section' }, h('summary', { text: 'Search preview' }), h('div', { class: 'row' }, field('SEO title', seoTitle), field('SEO description', seoDescription))),
+      h('section', { class: 'a-card editor-section project-editor-panel', id: 'project-panel-seo', role: 'tabpanel', 'aria-labelledby': 'project-tab-seo', 'data-editor-panel': 'seo', hidden: true }, h('div', { class: 'editor-panel-heading' }, h('h3', { text: 'Search appearance' }), h('p', { text: 'Set the title and description shown in search previews.' })), h('div', { class: 'row' }, field('SEO title', seoTitle), field('SEO description', seoDescription))),
+      h('section', { class: 'a-card editor-section project-editor-panel', id: 'project-panel-preview', role: 'tabpanel', 'aria-labelledby': 'project-tab-preview', 'data-editor-panel': 'preview', hidden: true }, h('div', { class: 'editor-panel-heading' }, h('h3', { text: 'Project preview' }), h('p', { text: 'Double-check the details before publishing.' })), editorPreview,
+        project ? h('a', { class: 'a-btn project-preview-link', href: `/project/${project.slug}?preview=1`, target: '_blank', rel: 'noopener', text: 'Open project preview ↗' }) : h('p', { class: 'editor-inline-note', text: 'Save this project first to open its preview.' })
+      ),
       message,
       h('div', { class: 'a-actions editor-sticky-actions' },
+        saveHint,
         h('button', { class: 'a-btn primary', type: 'submit', text: isNew ? 'Create project' : 'Save changes' }),
         h('button', {
           class: 'a-btn',
           type: 'button',
           text: 'Cancel',
-          onclick: () => { state.projectId = null; renderTab(); }
+          onclick: () => { if (!confirmProjectExit()) return; state.projectDirty = false; state.projectId = null; renderTab(); }
         })
       ),
       h('small', { text: 'Saved changes appear on the public site immediately when the project is published.' })
     );
+
+    form.addEventListener('input', () => { state.projectDirty = true; saveHint.textContent = 'Unsaved changes'; });
+    form.addEventListener('change', () => { state.projectDirty = true; saveHint.textContent = 'Unsaved changes'; });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -799,6 +923,7 @@
           await api(`/api/admin/projects/${project.id}`, { method: 'PUT', body: JSON.stringify(payload) });
           toast('Project saved.');
         }
+        state.projectDirty = false;
         state.projectId = null;
         await loadData();
         state.tab = 'projects';
@@ -809,7 +934,33 @@
       }
     });
 
+    const refreshEditorPreview = () => {
+      editorPreview.replaceChildren(
+        h('span', { class: 'project-preview-thumb' }, cover.value ? h('img', { src: cover.value, alt: '' }) : h('span', { 'aria-hidden': 'true', text: 'KM' })),
+        h('div', {}, h('strong', { text: title.value || 'Untitled project' }), h('p', { class: 'a-row-meta', text: `/${slug.value || 'project-slug'} · ${status.value}` }))
+      );
+    };
+    [title, slug, cover, status].forEach((control) => control.addEventListener('input', refreshEditorPreview));
+    status.addEventListener('change', refreshEditorPreview);
+    const editorTabs = [...form.querySelectorAll('[role="tab"]')];
+    editorTabs.forEach((tab, index) => tab.addEventListener('keydown', (event) => {
+      if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? editorTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : editorTabs.length - 1)) % editorTabs.length;
+      selectProjectEditorTab(form, editorTabs[next].id.replace('project-tab-', ''));
+      editorTabs[next].focus();
+    }));
+
     return h('section', { class: 'a-card' }, form);
+  }
+
+  function selectProjectEditorTab(form, id) {
+    form.querySelectorAll('[data-editor-panel]').forEach((panel) => { panel.hidden = panel.dataset.editorPanel !== id; });
+    form.querySelectorAll('[role="tab"]').forEach((tab) => {
+      const selected = tab.id === `project-tab-${id}`;
+      tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+      tab.tabIndex = selected ? 0 : -1;
+    });
   }
 
   async function archiveProject(project) {
@@ -1919,6 +2070,8 @@
   /* --------------------------------- boot --------------------------------- */
 
   logoutBtn?.addEventListener('click', async () => {
+    if (!confirmProjectExit()) return;
+    state.projectDirty = false;
     try {
       await api('/api/admin/logout', { method: 'POST', body: '{}' });
       location.replace(LOGIN_URL);
@@ -1926,6 +2079,54 @@
       toast('Could not sign out. Please try again.', true);
     }
   });
+
+  window.addEventListener('beforeunload', (event) => {
+    if (!state.projectDirty) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
+  sidebarToggle?.addEventListener('click', () => {
+    const collapsed = dashView.classList.toggle('is-collapsed');
+    sidebarToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+    sidebarToggle.title = collapsed ? 'Expand navigation' : 'Collapse navigation';
+    sidebarToggle.querySelector('span').textContent = collapsed ? '›' : '‹';
+    try { localStorage.setItem('km-admin-sidebar-collapsed', collapsed ? '1' : '0'); } catch {}
+  });
+
+  mobileNavToggle?.addEventListener('click', () => {
+    const open = dashSidebar.classList.toggle('is-open');
+    dashView.classList.toggle('mobile-nav-open', open);
+    mobileNavToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    mobileNavToggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+  });
+
+  dashView?.addEventListener('click', (event) => {
+    if (event.target !== dashView || !dashSidebar?.classList.contains('is-open')) return;
+    dashSidebar.classList.remove('is-open');
+    dashView.classList.remove('mobile-nav-open');
+    mobileNavToggle?.setAttribute('aria-expanded', 'false');
+    mobileNavToggle?.focus();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && dashSidebar?.classList.contains('is-open')) {
+      dashSidebar.classList.remove('is-open');
+      dashView.classList.remove('mobile-nav-open');
+      mobileNavToggle?.setAttribute('aria-expanded', 'false');
+      mobileNavToggle?.focus();
+    }
+  });
+
+  try {
+    if (dashView && localStorage.getItem('km-admin-sidebar-collapsed') === '1' && window.matchMedia('(min-width: 961px)').matches) {
+      dashView.classList.add('is-collapsed');
+      sidebarToggle?.setAttribute('aria-pressed', 'true');
+      sidebarToggle?.setAttribute('aria-label', 'Expand navigation');
+      if (sidebarToggle) sidebarToggle.querySelector('span').textContent = '›';
+    }
+  } catch {}
 
   async function boot() {
     if (!isLoginPage) {
@@ -1952,3 +2153,4 @@
 
   boot();
 })();
+
