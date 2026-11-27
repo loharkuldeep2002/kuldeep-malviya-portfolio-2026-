@@ -135,19 +135,15 @@
       });
       const response = await fetch(upload.uploadUrl, {
         method: 'PUT',
-        headers: {
-          'Content-Type': upload.mime,
-          'x-goog-meta-firebasestoragedownloadtokens': upload.downloadToken
-        },
+        headers: { 'Content-Type': upload.mime },
         body: file
       });
-      if (!response.ok) throw new Error('The file could not be uploaded to Firebase Storage.');
+      if (!response.ok) throw new Error('The file could not be uploaded to Vercel Blob. Check storage usage and try again.');
       return await api('/api/admin/media/complete', {
         method: 'POST',
         body: JSON.stringify({
           id: upload.id,
           path: upload.path,
-          downloadToken: upload.downloadToken,
           mime: upload.mime,
           size: upload.size,
           filename: file.name,
@@ -158,7 +154,7 @@
     } catch (error) {
       const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
       if (!isLocal || error.status !== 503 || !file.type.startsWith('image/')) throw error;
-      if (file.size > 5 * 1024 * 1024) throw new Error('Local fallback supports images up to 5 MB. Configure Firebase Storage for larger files.');
+      if (file.size > 5 * 1024 * 1024) throw new Error('Local fallback supports images up to 5 MB. Configure Vercel Blob for persistent media uploads.');
       return await api('/api/admin/media', {
         method: 'POST',
         body: JSON.stringify({ filename: file.name, dataUrl: await readFileAsDataUrl(file), alt, collection })
@@ -1346,8 +1342,8 @@
     const altInput = input('alt', '', { placeholder: 'Describe the image' });
     const collectionInput = input('collection', '', { placeholder: 'Collection / album name' });
     const storageReady = state.data.mediaStorageConfigured === true;
-    const readyMessage = 'Firebase Storage settings detected. Images up to 20 MB and videos up to 100 MB. Upload also requires bucket permissions and CORS to allow this site.';
-    const setupMessage = 'Uploads are not configured on this server. Set FIREBASE_STORAGE_BUCKET, enable the Firebase Storage bucket, grant server access, and allow this site in bucket CORS. Local disk uploads are disabled on Vercel.';
+    const readyMessage = 'Vercel Blob is connected. Images up to 20 MB and videos up to 100 MB; uploads stop before the app reaches its 900 MB free storage safety cap.';
+    const setupMessage = 'Persistent uploads are not configured on this server. Connect a Vercel Blob store to enable them. Local disk uploads are disabled on Vercel.';
     const message = h('p', { class: 'auth-note', role: 'status', 'aria-live': 'polite', text: storageReady ? readyMessage : setupMessage });
     const uploadBtn = h('button', { class: 'a-btn primary', type: 'button', text: 'Upload media' });
     let retryFiles = [];
@@ -1355,7 +1351,7 @@
     fileInput.addEventListener('change', () => {
       retryFiles = [];
       uploadBtn.textContent = 'Upload media';
-      message.textContent = 'Images up to 20 MB and videos up to 100 MB. Firebase Storage is used when configured.';
+      message.textContent = storageReady ? readyMessage : setupMessage;
     });
 
     uploadBtn.addEventListener('click', async () => {

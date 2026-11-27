@@ -17,6 +17,6 @@ WHAT IS INTENTIONALLY NOT INCLUDED
 - The separate master prompt / progress log; it is project guidance, not website runtime content.
 
 IMPORTANT
-This folder is prepared for source control and a Vercel Preview deployment workflow. It is not marked production-ready yet. Read `VERCEL_DEPLOYMENT_GUIDE.txt` before pushing or deploying. In particular, Admin media uploads currently write to a local folder; Vercel's runtime filesystem is not durable. Configure Firebase Storage or another persistent file store and adapt that upload path before relying on uploads in production.
+This folder is prepared for source control and a Vercel Preview deployment workflow. It is not marked production-ready yet. Read `VERCEL_DEPLOYMENT_GUIDE.txt` before deploying. Admin media now uses signed direct uploads to Vercel Blob; connect a separate store for each environment. Preview needs its own `BLOB_PREVIEW_READ_WRITE_TOKEN`, and local uploads are disabled unless explicitly opted in. Public media URLs are visible to anyone who has the link. The admin uses a 900 MB application safety cap; review current Vercel Blob plan limits and usage before launch.
 
 Do not drag the original `.env`, `data/`, or `uploads/` into this package. Do not paste secret values into chat.

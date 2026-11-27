@@ -87,7 +87,7 @@ On first startup after the import, the admin login page should show **First-time
 
 Firestore rules deny browser reads and writes. The trusted Node server uses Firebase Admin SDK and validates the portfolio admin session before CMS operations. Never switch the rules to public/test access. For a server outside Google Cloud, configure `FIREBASE_SERVICE_ACCOUNT_JSON` as a protected environment secret; never put it in browser assets, `.env.example`, or GitHub.
 
-The media library uses server-issued short-lived Google Cloud Storage upload URLs for image and video files. Configure `FIREBASE_STORAGE_BUCKET` in the private environment and keep `DATA_STORE=firestore` so the Firebase Admin app is initialized. The bucket must be enabled, the server identity needs object read/write permissions, and bucket CORS must allow `PUT` from the portfolio origin with `Content-Type` and `x-goog-meta-firebasestoragedownloadtokens` request headers. The Storage Rules file denies direct browser access; the server uses a signed URL for each upload and verifies object type and size before adding it to Firestore. Do not enable a paid bucket or change the Firebase billing plan without approval. Firebase database setup does not deploy the Node website; the host must run this Node server and provide the Firestore identity securely. The current `firebase.json` configures Firestore and Storage rules, not Hosting. Firebase Hosting on Spark serves static files and does not run this Node server. The Vercel Hobby plan is restricted to personal/non-commercial use; check whether that fits this service portfolio before choosing it. A free Node host may sleep or lose local JSON data, so do not treat those limitations as durable production hosting.
+The media library uses server-issued, five-minute Vercel Blob upload URLs. Connect a Vercel Blob store to the project; Vercel injects `BLOB_READ_WRITE_TOKEN` into selected environments. Production uses that token only when `VERCEL_ENV=production`. Preview requires a separate store token named `BLOB_PREVIEW_READ_WRITE_TOKEN`; never point Preview at the production store. Local uploads remain disabled unless `BLOB_LOCAL_DEVELOPMENT=true` is explicitly set. Uploads accept JPEG/PNG/WebP/GIF up to 20 MB and MP4/WebM/MOV up to 100 MB, and the application stops accepting new uploads near 900 MB to leave headroom under the free allowance. The store is public because portfolio images and videos must render on public pages; anyone with a media URL can view that file. Firebase Storage is not used by this upload flow, so no bucket setup or CORS configuration is needed. Firebase database setup does not deploy the Node website; the host must run this Node server and provide the Firestore identity securely. The current `firebase.json` configures Firestore and Storage rules, not Hosting. Firebase Storage currently requires the Blaze billing plan, so do not enable it under the strict $0 requirement. Vercel Hobby is eligible only for personal, non-commercial projects. Check the service's actual use against Vercel's terms and current Blob limits before operating the public site; this setup does not guarantee unlimited free usage.
 
 ## Optional aggregate analytics
 
@@ -95,17 +95,4 @@ Analytics are disabled by default. To enable collection, set `ANALYTICS_ENABLED=
 
 ## Content revisions and backups
 
-Recent project, service, and site-content edits keep bounded snapshots in the settings record (up to 40 revisions, subject to a 700 KiB cap). Revision restore requires the current admin password and explicit `RESTORE` confirmation. A revision cannot bring back an entity that was permanently deleted. Download a JSON backup before a major change. Backups include content and media metadata/references, but not the underlying image/video files, admin accounts, MFA secrets, sessions, or credentials. Restore replaces project/service/review/comment/media metadata and site content/navigation/SEO; admin/security records remain untouched. Verify the restored media files still exist in Storage before publishing.
-
-Example bucket CORS configuration (replace the origin with the exact Preview/Production domains before applying):
-
-```json
-[
-  {
-    "origin": ["https://your-portfolio.example"],
-    "method": ["PUT", "OPTIONS"],
-    "responseHeader": ["Content-Type", "x-goog-resumable", "x-goog-meta-firebasestoragedownloadtokens"],
-    "maxAgeSeconds": 3600
-  }
-]
-```
+Recent project, service, and site-content edits keep bounded snapshots in the settings record (up to 40 revisions, subject to a 700 KiB cap). Revision restore requires the current admin password and explicit `RESTORE` confirmation. A revision cannot bring back an entity that was permanently deleted. Download a JSON backup before a major change. Backups include content and media metadata/references, but not the underlying image/video files, admin accounts, MFA secrets, sessions, or credentials. Restore replaces project/service/review/comment/media metadata and site content/navigation/SEO; admin/security records remain untouched. Verify the referenced media files still exist in Vercel Blob before publishing.

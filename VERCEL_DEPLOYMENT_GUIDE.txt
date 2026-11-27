@@ -27,7 +27,7 @@ Set these in the Vercel project settings, not in Git:
 Vercel supplies `PORT`; do not copy the local `.env` values for HOST/PORT. Keep `ADMIN_BOOTSTRAP_TOKEN` unset unless a fresh admin bootstrap/reset is specifically required. The existing database currently reports an admin configured.
 
 PRODUCTION BLOCKER: UPLOADED MEDIA
-The current CMS upload endpoint writes new files to local `uploads/`. Vercel Functions have a read-only filesystem except temporary `/tmp` scratch space, so files written there will not be durable across invocations. Before using Admin media uploads on a live deployment, move upload storage to Firebase Storage or another durable object store and adapt the CMS/API integration. Existing images in `assets/` are packaged as code assets; user uploads are not.
+CMS media uses short-lived signed uploads to Vercel Blob; it does not write persistent files to the Vercel Function filesystem. Connect one public Blob store to Production and a separate store to Preview. The app recognizes `BLOB_READ_WRITE_TOKEN` only in Production and requires `BLOB_PREVIEW_READ_WRITE_TOKEN` in Preview. Public media URLs can be viewed by anyone who has the link. Upload limits are 20 MB per image, 100 MB per video, with a 900 MB application safety cap; verify plan usage and the current no-cost allowance before launch. Existing images in `assets/` remain packaged as code assets.
 
 FIREBASE ACCESS
 - Firestore rules and indexes are included in `firebase/` and `firebase.json`.
